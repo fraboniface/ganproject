@@ -1,5 +1,4 @@
 import numpy as np
-import matplotlib.pyplot as plt
 
 import torch
 import torch.nn as nn
@@ -12,8 +11,8 @@ import torchvision.utils as vutils
 
 from tqdm import tqdm
 
-#SAVE_FOLDER = '/home/s1782330/samples_DCGAN_MNIST
-SAVE_FOLDER = './saved_samples'
+SAVE_FOLDER = '/home/s1782330/ganproject/samples_DCGAN_CIFAR10'
+#SAVE_FOLDER = './saved_samples'
 gpu = torch.cuda.is_available()
 
 transform = transforms.Compose(
@@ -151,6 +150,6 @@ for epoch in tqdm(range(1,n_epochs+1)):
 		g_error.backward()
 		g_optimiser.step()
 
-		print('[%d/%d][%d/%d] Loss_D: %.4f Loss_G: %.4f D(x): %.4f D(G(z)): %.4f / %.4f'
-		% (epoch, n_epochs, i, len(dataloader),
-		loss_d.data[0], g_error.data[0], d_x, d_g_z1, d_g_z2))
+		#print('[%d/%d][%d/%d] Loss_D: %.4f Loss_G: %.4f D(x): %.4f D(G(z)): %.4f / %.4f'
+		#% (epoch, n_epochs, i, len(dataloader),
+		#loss_d.data[0], g_error.data[0], d_x, d_g_z1, d_g_z2))
