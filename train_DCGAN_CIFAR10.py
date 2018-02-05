@@ -11,8 +11,8 @@ import torchvision.utils as vutils
 
 from tqdm import tqdm
 
-SAVE_FOLDER = '/home/s1782330/ganproject/samples_DCGAN_CIFAR10'
-#SAVE_FOLDER = './saved_samples'
+SAVE_FOLDER = './samples_DCGAN_CIFAR10'
+
 gpu = torch.cuda.is_available()
 
 transform = transforms.Compose(
@@ -56,7 +56,6 @@ class Discriminator(nn.Module):
         self.main = nn.Sequential(
             #32x32
             nn.Conv2d(n_channels, 2*n_channels, 4, 2, 1),
-            nn.BatchNorm2d(2*n_channels),
             nn.LeakyReLU(0.2, inplace=True),
             #16x16
             nn.Conv2d(2*n_channels, 4*n_channels, 4, 2, 1),
@@ -77,7 +76,7 @@ class Discriminator(nn.Module):
         return output.view(-1, 1).squeeze(1)
 
 
-n_epochs = 100
+n_epochs = 50
 lr = 1e-4
 z_size = 100
 n_channels = 3

@@ -12,7 +12,8 @@ import torchvision.utils as vutils
 
 from tqdm import tqdm
 
-SAVE_FOLDER = '/home/s1782330/samples_DCGAN_MNIST'
+SAVE_FOLDER = './samples_DCGAN_MNIST'
+
 gpu = torch.cuda.is_available()
 
 transform = transforms.Compose(
@@ -52,7 +53,6 @@ class Discriminator(nn.Module):
         self.main = nn.Sequential(
             #28x28
             nn.Conv2d(1, 4, 4, 2, 1),
-            nn.BatchNorm2d(4),
             nn.LeakyReLU(0.2, inplace=True),
             #14x14
             nn.Conv2d(4, 8, 4, 2, 1, bias=False),
@@ -69,7 +69,7 @@ class Discriminator(nn.Module):
         return output.view(-1, 1).squeeze(1)
 
 
-n_epochs = 100
+n_epochs = 50
 lr = 1e-4
 z_size = 100
 
@@ -141,6 +141,6 @@ for epoch in tqdm(range(1,n_epochs+1)):
 		g_error.backward()
 		g_optimiser.step()
 
-		print('[%d/%d][%d/%d] Loss_D: %.4f Loss_G: %.4f D(x): %.4f D(G(z)): %.4f / %.4f'
-		% (epoch, n_epochs, i, len(dataloader),
-		loss_d.data[0], g_error.data[0], d_x, d_g_z1, d_g_z2))
+		#print('[%d/%d][%d/%d] Loss_D: %.4f Loss_G: %.4f D(x): %.4f D(G(z)): %.4f / %.4f'
+		#% (epoch, n_epochs, i, len(dataloader),
+		#loss_d.data[0], g_error.data[0], d_x, d_g_z1, d_g_z2))
