@@ -22,7 +22,7 @@ transform = transforms.Compose(
 ])
 cifar = torchvision.datasets.CIFAR10('../data', train=True, download=True, transform=transform)
 
-batch_size = 128
+batch_size = 100
 dataloader = torch.utils.data.DataLoader(cifar, batch_size=batch_size, shuffle=True, num_workers=2)
 
 #custom weights init
