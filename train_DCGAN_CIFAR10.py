@@ -22,28 +22,40 @@ transform = transforms.Compose(
 ])
 cifar = torchvision.datasets.CIFAR10('../data', train=True, download=True, transform=transform)
 
-batch_size = 50
+batch_size = 128
 dataloader = torch.utils.data.DataLoader(cifar, batch_size=batch_size, shuffle=True, num_workers=2)
 
+#custom weights init
+def weights_init(m):
+	classname = m.__class__.__name__
+	if classname.find('Conv') != -1:
+		m.weight.data.normal_(0.0, 0.02)
+	elif classname.find('BatchNorm') != -1:
+		m.weight.data.normal_(1.0, 0.02)
+		m.bias.data.fill_(0)
+
 class Generator(nn.Module):
-    def __init__(self, zdim=100, n_channels=3):
+    def __init__(self, zdim=100, n_feature_maps=64):
         super(Generator, self).__init__()
         self.main = nn.Sequential(
         	#1x1
-        	nn.ConvTranspose2d(zdim, 8*n_channels, 4, 1, 0, bias=False),
-            nn.BatchNorm2d(8*n_channels),
+        	nn.ConvTranspose2d(zdim, 8*n_feature_maps, 4, 1, 0, bias=False),
+            nn.BatchNorm2d(8*n_feature_maps),
             nn.ReLU(True),
             #4x4
-            nn.ConvTranspose2d(8*n_channels, 4*n_channels, 4, 2, 1, bias=False),
-            nn.BatchNorm2d(4*n_channels),
+            nn.ConvTranspose2d(8*n_feature_maps, 4*n_feature_maps, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(4*n_feature_maps),
             nn.ReLU(True),
             #8x8
-            nn.ConvTranspose2d(4*n_channels, 2*n_channels, 4, 2, 1, bias=False),
-            nn.BatchNorm2d(2*n_channels),
+            nn.ConvTranspose2d(4*n_feature_maps, 2*n_feature_maps, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(2*n_feature_maps),
             nn.ReLU(True),
             #16x16
-            nn.ConvTranspose2d(2*n_channels, n_channels, 4, 2, 1, bias=False),
-            #32x32
+            nn.ConvTranspose2d(2*n_feature_maps, n_feature_maps, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(n_feature_maps),
+            nn.ReLU(True),
+            # 32x32
+            nn.Conv2d(n_feature_maps, 3, 1, 1, 0, bias=False), #1x1 convolution to reduce the number of feature maps and keep the same size
             nn.Tanh()
         )
         
@@ -51,22 +63,22 @@ class Generator(nn.Module):
         return self.main(x)
     
 class Discriminator(nn.Module):
-    def __init__(self, n_channels=3):
+    def __init__(self, n_feature_maps=64):
         super(Discriminator, self).__init__()
         self.main = nn.Sequential(
             #32x32
-            nn.Conv2d(n_channels, 2*n_channels, 4, 2, 1),
+            nn.Conv2d(3, n_feature_maps, 4, 2, 1, bias=False),
             nn.LeakyReLU(0.2, inplace=True),
             #16x16
-            nn.Conv2d(2*n_channels, 4*n_channels, 4, 2, 1),
-            nn.BatchNorm2d(4*n_channels),
+            nn.Conv2d(n_feature_maps, 2*n_feature_maps, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(2*n_feature_maps),
             nn.LeakyReLU(0.2, inplace=True),
             #8x8
-            nn.Conv2d(4*n_channels, 8*n_channels, 4, 2, 1, bias=False),
-            nn.BatchNorm2d(8*n_channels),
+            nn.Conv2d(2*n_feature_maps, 4*n_feature_maps, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(4*n_feature_maps),
             nn.LeakyReLU(0.2, inplace=True),
             #4x4
-            nn.Conv2d(8*n_channels, 1, 4, 1, 0, bias=False),
+            nn.Conv2d(4*n_feature_maps, 1, 4, 1, 0, bias=False),
             # 1x1
             nn.Sigmoid()
         )
@@ -76,15 +88,18 @@ class Discriminator(nn.Module):
         return output.view(-1, 1).squeeze(1)
 
 
-n_epochs = 50
-lr = 1e-4
 z_size = 100
-n_channels = 3
-G = Generator(z_size, n_channels)
-D = Discriminator(n_channels)
+G = Generator(z_size)
+G.apply(weights_init)
 
-g_optimiser = optim.Adam(G.parameters(), lr=lr)
-d_optimiser = optim.Adam(D.parameters(), lr=lr)
+D = Discriminator()
+D.apply(weights_init)
+
+lr = 2e-4
+beta1 = 0.5
+beta2 = 0.999
+g_optimiser = optim.Adam(G.parameters(), lr=lr, betas=(beta1, beta2))
+d_optimiser = optim.Adam(D.parameters(), lr=lr, betas=(beta1, beta2))
 
 criterion = nn.BCELoss()
 
@@ -103,9 +118,11 @@ if gpu:
 	zeros = zeros.cuda()
 	fixed_noise = fixed_noise.cuda()
 
+
+n_epochs = 50
 for epoch in tqdm(range(1,n_epochs+1)):
 	fake = G(fixed_noise)
-	vutils.save_image(fake.data, '%s/fake_samples_epoch_%03d.png' % (SAVE_FOLDER, epoch), normalize=True)
+	vutils.save_image(fake.data, '%s/samples_epoch_%03d.png' % (SAVE_FOLDER, epoch), normalize=True)
 
 	for i, data in enumerate(dataloader):
 		img, _ = data

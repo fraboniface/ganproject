@@ -25,6 +25,15 @@ mnist = torchvision.datasets.MNIST('../data', train=True, download=True, transfo
 batch_size = 50
 dataloader = torch.utils.data.DataLoader(mnist, batch_size=batch_size, shuffle=True, num_workers=2)
 
+#custom weights init
+def weights_init(m):
+	classname = m.__class__.__name__
+	if classname.find('Conv') != -1:
+		m.weight.data.normal_(0.0, 0.02)
+	elif classname.find('BatchNorm') != -1:
+		m.weight.data.normal_(1.0, 0.02)
+		m.bias.data.fill_(0)
+
 class Generator(nn.Module):
     def __init__(self, zdim=100):
         super(Generator, self).__init__()
@@ -51,7 +60,7 @@ class Discriminator(nn.Module):
         super(Discriminator, self).__init__()
         self.main = nn.Sequential(
             #28x28
-            nn.Conv2d(1, 4, 4, 2, 1),
+            nn.Conv2d(1, 4, 4, 2, 1, bias=False),
             nn.LeakyReLU(0.2, inplace=True),
             #14x14
             nn.Conv2d(4, 8, 4, 2, 1, bias=False),
@@ -68,15 +77,20 @@ class Discriminator(nn.Module):
         return output.view(-1, 1).squeeze(1)
 
 
-n_epochs = 50
-lr = 1e-4
+
+
 z_size = 100
-
 G = Generator(z_size)
-D = Discriminator()
+G.apply(weights_init)
 
-g_optimiser = optim.Adam(G.parameters(), lr=lr)
-d_optimiser = optim.Adam(D.parameters(), lr=lr)
+D = Discriminator()
+D.apply(weights_init)
+
+lr = 2e-4
+beta1 = 0.5
+beta2 = 0.999
+g_optimiser = optim.Adam(G.parameters(), lr=lr, betas=(beta1, beta2))
+d_optimiser = optim.Adam(D.parameters(), lr=lr, betas=(beta1, beta2))
 
 criterion = nn.BCELoss()
 
@@ -94,6 +108,7 @@ if gpu:
 	zeros = zeros.cuda()
 	fixed_noise = fixed_noise.cuda()
 
+n_epochs = 50
 for epoch in tqdm(range(1,n_epochs+1)):
 	fake = G(fixed_noise)
 	vutils.save_image(fake.data, '%s/fake_samples_epoch_%03d.png' % (SAVE_FOLDER, epoch), normalize=True)
