@@ -103,8 +103,9 @@ d_optimiser = optim.Adam(D.parameters(), lr=lr, betas=(beta1, beta2))
 
 criterion = nn.BCELoss()
 
-# modify for label smoothing
-ones = Variable(torch.ones(batch_size))
+#ones = Variable(torch.ones(batch_size))
+#use line below for one-sided label smoothing
+ones = 0.9*Variable(torch.ones(batch_size))
 zeros = Variable(torch.zeros(batch_size))
 
 fixed_noise = Variable(torch.FloatTensor(batch_size, z_size, 1, 1).normal_(0,1))
@@ -122,7 +123,7 @@ if gpu:
 n_epochs = 50
 for epoch in tqdm(range(1,n_epochs+1)):
 	fake = G(fixed_noise)
-	vutils.save_image(fake.data, '%s/samples_epoch_%03d.png' % (SAVE_FOLDER, epoch), normalize=True)
+	vutils.save_image(fake.data, '%s/samples_labsmooth_epoch_%03d.png' % (SAVE_FOLDER, epoch), normalize=True)
 
 	for i, data in enumerate(dataloader):
 		img, _ = data
