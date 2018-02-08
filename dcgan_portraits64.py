@@ -6,7 +6,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torch.autograd import Variable
 import torchvision
-import torchvision.transforms as transforms
+from torchvision import transforms, datasets
 import torchvision.utils as vutils
 
 from tqdm import tqdm
@@ -22,7 +22,7 @@ transform = transforms.Compose(
 ])
 
 batch_size = 100
-portraits = datasets.ImageFolder('paintings64/', transform=data_transform)
+portraits = datasets.ImageFolder('paintings64/', transform=transform)
 dataloader = torch.utils.data.DataLoader(portraits, batch_size=batch_size, shuffle=True, num_workers=2)
 
 #custom weights init
@@ -79,7 +79,7 @@ class Discriminator(nn.Module):
             nn.BatchNorm2d(4*n_feature_maps),
             nn.LeakyReLU(0.2, inplace=True),
             #8x8
-            nn.Conv2d(4*n_feature_maps, 8*n_feature_maps, 4, 1, 0, bias=False),
+            nn.Conv2d(4*n_feature_maps, 8*n_feature_maps, 4, 2, 1, bias=False),
             nn.BatchNorm2d(8*n_feature_maps),
             nn.LeakyReLU(0.2, inplace=True),
             # 4x4
@@ -108,9 +108,9 @@ d_optimiser = optim.Adam(D.parameters(), lr=lr, betas=(beta1, beta2))
 
 criterion = nn.BCELoss()
 
-ones = Variable(torch.ones(batch_size))
-# use below for one-sided label smoothing
-#ones = 0.9*Variable(torch.ones(batch_size))
+#ones = Variable(torch.ones(batch_size))
+#use line below for one-sided label smoothing
+ones = 0.9*Variable(torch.ones(batch_size))
 zeros = Variable(torch.zeros(batch_size))
 
 fixed_noise = Variable(torch.FloatTensor(batch_size, z_size, 1, 1).normal_(0,1))
