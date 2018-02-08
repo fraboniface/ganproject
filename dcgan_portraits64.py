@@ -22,7 +22,7 @@ transform = transforms.Compose(
 ])
 
 batch_size = 100
-portraits = datasets.ImageFolder('paintings64/', transform=transform)
+portraits = datasets.ImageFolder('../paintings64/', transform=transform)
 dataloader = torch.utils.data.DataLoader(portraits, batch_size=batch_size, shuffle=True, num_workers=2)
 
 #custom weights init
