@@ -15,6 +15,8 @@ SAMPLES_FOLDER = './mnist_samples'
 RESULTS_FOLDER = './results/'
 N_CLASSES = 10
 
+tracemalloc.start()
+
 gpu = torch.cuda.is_available()
 
 transform = transforms.Compose(
@@ -24,10 +26,10 @@ transform = transforms.Compose(
 ])
 mnist = datasets.MNIST('../data', train=True, download=True, transform=transform)
 
-batch_size = 100
+batch_size = 50
 dataloader = torch.utils.data.DataLoader(mnist, batch_size=batch_size, shuffle=True, num_workers=2)
 
-def one_hot(batch,n_classes=N_CLASSES):
+def onehot(batch,n_classes=N_CLASSES):
 	ones = torch.sparse.torch.eye(n_classes)
 	return ones.index_select(0,batch).view(-1,n_classes,1,1)
 
@@ -84,7 +86,7 @@ class ConditionalDiscriminator(nn.Module):
         
     def  forward(self, x, y):
     	x = self.main(x) #7x7x(2*num_features)
-    	y = self.deconv_label(y) #idem
+    	y = F.leaky_relu(self.deconv_label(y), 0.2) #idem
     	merge = torch.cat([x,y], 1)
     	# 7x7x(4*num_features)
     	logit = self.last(merge)
@@ -117,7 +119,7 @@ fixed_noise = Variable(torch.FloatTensor(n_samples_per_class, z_size, 1, 1).norm
 fixed_noise = fixed_noise.repeat(N_CLASSES,1,1,1)
 label_vectors = torch.FloatTensor()
 for i in range(N_CLASSES):
-    tmp = one_hot(i*torch.ones(n_samples_per_class).long())
+    tmp = onehot(i*torch.ones(n_samples_per_class).long())
     label_vectors = torch.cat([label_vectors,tmp])
 
 label_vectors = Variable(label_vectors)
@@ -138,11 +140,11 @@ loss_d_fake = []
 loss_d = []
 loss_g = []
 
-n_epochs = 1
+n_epochs = 20
 for epoch in tqdm(range(1,n_epochs+1)):
 	for i, data in enumerate(dataloader):
 		img, labels = data
-		labels = one_hot(labels)
+		labels = onehot(labels)
 		if gpu:
 			img = img.cuda()
 			labels = labels.cuda()
@@ -161,11 +163,14 @@ for epoch in tqdm(range(1,n_epochs+1)):
 
 		#fake data
 		z = torch.FloatTensor(batch_size, z_size, 1, 1).normal_(0,1)
+		y = onehot(torch.LongTensor(batch_size).random_(0,N_CLASSES))
 		if gpu:
 			z = z.cuda()
+			y = y.cuda()
 		z = Variable(z)
-		fake_data = G(z, labels) # we use the same labels, maybe we should generate fake labels
-		d_fake = D(fake_data.detach(), labels)
+		y = Variable(y)
+		fake_data = G(z, y)
+		d_fake = D(fake_data.detach(), y)
 		d_fake_error = criterion(d_fake, zeros)
 		loss_d_fake.append(d_fake_error)
 		d_fake_error.backward()
@@ -176,11 +181,14 @@ for epoch in tqdm(range(1,n_epochs+1)):
 		# GENERATOR STEP
 		G.zero_grad()
 		z = torch.FloatTensor(batch_size, z_size, 1, 1).normal_(0,1)
+		y = onehot(torch.LongTensor(batch_size).random_(0,N_CLASSES))
 		if gpu:
 			z = z.cuda()
+			y = y.cuda()
 		z = Variable(z)
-		gen_data = G(z, labels)
-		d_output = D(gen_data, labels)
+		y = Variable(y)
+		gen_data = G(z, y)
+		d_output = D(gen_data, y)
 		g_error = criterion(d_output, ones)
 		loss_g.append(g_error)
 		g_error.backward()
@@ -200,5 +208,5 @@ results = {
 	'loss_g': loss_g,
 	'samples': samples
 }
-with open(RESULTS_FOLDER + 'losses_and_samples_mnist_conditionalDCGAN', 'wb') as f:
+with open(RESULTS_FOLDER + 'losses_and_samples_mnist_conditionalDCGAN.p', 'wb') as f:
 	pickle.dump(data, f)
