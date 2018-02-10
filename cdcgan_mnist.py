@@ -24,7 +24,7 @@ transform = transforms.Compose(
 ])
 mnist = datasets.MNIST('../data', train=True, download=True, transform=transform)
 
-batch_size = 100
+batch_size = 50
 dataloader = torch.utils.data.DataLoader(mnist, batch_size=batch_size, shuffle=True, num_workers=2)
 
 def one_hot(batch,n_classes=N_CLASSES):
@@ -138,7 +138,7 @@ loss_d_fake = []
 loss_d = []
 loss_g = []
 
-n_epochs = 1
+n_epochs = 50
 for epoch in tqdm(range(1,n_epochs+1)):
 	for i, data in enumerate(dataloader):
 		img, labels = data
@@ -187,7 +187,7 @@ for epoch in tqdm(range(1,n_epochs+1)):
 		g_optimiser.step()
 
 	fake = G(fixed_noise, label_vectors)
-	samples.append(fake.data.numpy())
+	samples.append(fake.data.cpu().numpy())
 	vutils.save_image(fake.data, '%s/conditional_samples_epoch_%03d.png' % (SAMPLES_FOLDER, epoch), normalize=True)
 
 # save everything
