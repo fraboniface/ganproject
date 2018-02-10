@@ -35,39 +35,42 @@ def weights_init(m):
 		m.bias.data.fill_(0)
 
 class Generator(nn.Module):
-    def __init__(self, zdim=100):
+    def __init__(self, zdim=100, num_features=64):
         super(Generator, self).__init__()
+        self.zdim = zdim
+        self.num_features = num_features
         self.main = nn.Sequential(
             #1x1
-            nn.ConvTranspose2d(zdim, 8, 7, 1, 0, bias=False),
-            nn.BatchNorm2d(8),
+            nn.ConvTranspose2d(zdim, 2*num_features, 7, 1, 0, bias=False),
+            nn.BatchNorm2d(2*num_features),
             nn.ReLU(True),
             #7x7
-            nn.ConvTranspose2d(8, 4, 4, 2, 1, bias=False),
-            nn.BatchNorm2d(4),
+            nn.ConvTranspose2d(2*num_features, num_features, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(num_features),
             nn.ReLU(True),
             #14x14
-            nn.ConvTranspose2d(4, 1, 4, 2, 1, bias=False),
+            nn.ConvTranspose2d(num_features, 1, 4, 2, 1, bias=False),
             #28x28 -> output
             nn.Tanh()
         )
         
-    def  forward(self, x):
+    def  forward(self, x, y):
+    	#define convtranspose in init, apply it to x and y, concat, apply rest of main
         return self.main(x)
     
 class Discriminator(nn.Module):
-    def __init__(self):
+    def __init__(self, num_features=64):
         super(Discriminator, self).__init__()
         self.main = nn.Sequential(
             #28x28
-            nn.Conv2d(1, 4, 4, 2, 1, bias=False),
+            nn.Conv2d(1, num_features, 4, 2, 1, bias=False),
             nn.LeakyReLU(0.2, inplace=True),
             #14x14
-            nn.Conv2d(4, 8, 4, 2, 1, bias=False),
-            nn.BatchNorm2d(8),
+            nn.Conv2d(num_features, 2*num_features, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(2*num_features),
             nn.LeakyReLU(0.2, inplace=True),
             #7x7
-            nn.Conv2d(8, 1, 7, 1, 0, bias=False),
+            nn.Conv2d(2*num_features, 1, 7, 1, 0, bias=False),
             # 1x1
             nn.Sigmoid()
         )
