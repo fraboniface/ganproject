@@ -250,4 +250,4 @@ results = {
 	'samples': samples
 }
 with open(RESULTS_FOLDER + 'losses_and_samples_cifar_conditionalDCGAN.p', 'wb') as f:
-	pickle.dump(data, f)
+	pickle.dump(results, f)

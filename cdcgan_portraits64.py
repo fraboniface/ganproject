@@ -11,28 +11,24 @@ import torchvision.utils as vutils
 import pickle
 from tqdm import tqdm
 
-SAMPLES_FOLDER = './mnist_samples'
+SAMPLES_FOLDER = './portraits_samples'
 RESULTS_FOLDER = './results/'
 
-n_classes = 10
-img_size = 32
-n_channels = 1
-n_feature_maps = 64
-n_epochs = 20
-batch_size = 50
+n_classes = 21
+img_size = 64
+n_channels = 3
+n_feature_maps = 128
+n_epochs = 50
+batch_size = 100
 
 transform = transforms.Compose(
 [
-	transforms.Resize(img_size),
     transforms.ToTensor(),
     transforms.Normalize((0.5,0.5,0.5), (0.5,0.5,0.5))
 ])
-mnist = datasets.MNIST('../data', train=True, download=True, transform=transform)
-dataloader = torch.utils.data.DataLoader(mnist, batch_size=batch_size, shuffle=True, num_workers=2)
+portraits = datasets.ImageFolder('../paintings64/portraits/', transform=transform)
+dataloader = torch.utils.data.DataLoader(portraits, batch_size=batch_size, shuffle=True, num_workers=2)
 
-#def onehot(batch,n_classes=N_CLASSES):
-#	ones = torch.sparse.torch.eye(n_classes)
-#	return ones.index_select(0,batch).view(-1,n_classes,1,1)
 
 #custom weights init
 def weights_init(m):
@@ -47,22 +43,26 @@ def weights_init(m):
 class ConditionalGenerator(nn.Module):
     def __init__(self, zdim=100, num_features=n_feature_maps):
         super(ConditionalGenerator, self).__init__()
-        self.deconv_noise = nn.ConvTranspose2d(zdim, 2*num_features, 4, 1, 0, bias=False)
-        self.deconv_label = nn.ConvTranspose2d(n_classes, 2*num_features, 4, 1, 0, bias=False)
+        self.deconv_noise = nn.ConvTranspose2d(zdim, 4*num_features, 4, 1, 0, bias=False)
+        self.deconv_label = nn.ConvTranspose2d(n_classes, 4*num_features, 4, 1, 0, bias=False)
         self.main = nn.Sequential(
-        	#4x4
-            nn.BatchNorm2d(4*num_features),
+            nn.BatchNorm2d(8*n_feature_maps),
             nn.ReLU(True),
-            nn.ConvTranspose2d(4*num_features,2*num_features, 4, 2, 1, bias=False),
+            #4x4
+            nn.ConvTranspose2d(8*n_feature_maps, 4*n_feature_maps, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(4*n_feature_maps),
+            nn.ReLU(True),
             #8x8
-            nn.BatchNorm2d(2*num_features),
+            nn.ConvTranspose2d(4*n_feature_maps, 2*n_feature_maps, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(2*n_feature_maps),
             nn.ReLU(True),
-            nn.ConvTranspose2d(2*num_features, num_features, 4, 2, 1, bias=False),
             #16x16
-            nn.BatchNorm2d(num_features),
+            nn.ConvTranspose2d(2*n_feature_maps, n_feature_maps, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(n_feature_maps),
             nn.ReLU(True),
-            nn.ConvTranspose2d(num_features, n_channels, 4, 2, 1, bias=False),
             #32x32
+            nn.ConvTranspose2d(n_feature_maps, 3, 4, 2, 1, bias=False),
+            #64x64
             nn.Tanh()
         )
         
@@ -80,19 +80,23 @@ class ConditionalDiscriminator(nn.Module):
         #32x32
         self.conv_image = nn.Conv2d(n_channels, int(num_features/2), 4, 2, 1, bias=False)
         self.conv_label = nn.Conv2d(n_classes, int(num_features/2), 4, 2, 1, bias=False)
-
         self.main = nn.Sequential(
+            #64x64
+            nn.LeakyReLU(0.2, inplace=True),
+            #32x32
+            nn.Conv2d(n_feature_maps, 2*n_feature_maps, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(2*n_feature_maps),
             nn.LeakyReLU(0.2, inplace=True),
             #16x16
-            nn.Conv2d(num_features, 2*num_features, 4, 2, 1, bias=False),
+            nn.Conv2d(2*n_feature_maps, 4*n_feature_maps, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(4*n_feature_maps),
+            nn.LeakyReLU(0.2, inplace=True),
             #8x8
-            nn.BatchNorm2d(2*num_features),
+            nn.Conv2d(4*n_feature_maps, 8*n_feature_maps, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(8*n_feature_maps),
             nn.LeakyReLU(0.2, inplace=True),
-            nn.Conv2d(2*num_features, 4*num_features, 4, 2, 1, bias=False),
-            #4x4
-            nn.BatchNorm2d(4*num_features),
-            nn.LeakyReLU(0.2, inplace=True),
-            nn.Conv2d(4*num_features, 1, 4, 1, 0, bias=False),
+            # 4x4
+            nn.Conv2d(8*n_feature_maps, 1, 4, 1, 0, bias=False),
             #1x1
             nn.Sigmoid()
         )
@@ -126,9 +130,9 @@ criterion = nn.BCELoss()
 # fill is the same but contains a  n_classes x img_size x img_size for each class
 # onehot is for inputs to the generator and fill to the generator 
 onehot = torch.zeros(n_classes, n_classes)
-onehot = onehot.scatter_(1, torch.LongTensor(np.arange(10)).view(10,1), 1).view(10, 10, 1, 1)
+onehot = onehot.scatter_(1, torch.LongTensor(np.arange(n_classes)).view(n_classes,1), 1).view(n_classes, n_classes, 1, 1)
 fill = torch.zeros([n_classes, n_classes, img_size, img_size])
-for i in range(10):
+for i in range(n_classes):
     fill[i, i, :, :] = 1
 
 # we generate 10 samples for each class and each class has the same noise vector
@@ -240,8 +244,8 @@ for epoch in tqdm(range(1,n_epochs+1)):
 	vutils.save_image(fake.data, '%s/conditional_samples_epoch_%03d.png' % (SAMPLES_FOLDER, epoch), normalize=True)
 
 # save everything
-torch.save(G.state_dict(), RESULTS_FOLDER + 'mnist_conditional_generator_{}epochs'.format(n_epochs))
-torch.save(D.state_dict(), RESULTS_FOLDER + 'mnist_conditional_discriminator_{}epochs'.format(n_epochs))
+torch.save(G.state_dict(), RESULTS_FOLDER + 'portraits64_conditional_generator_{}epochs'.format(n_epochs))
+torch.save(D.state_dict(), RESULTS_FOLDER + 'portraits64_conditional_discriminator_{}epochs'.format(n_epochs))
 results = {
 	'loss_d': loss_d,
 	'loss_d_real': loss_d_real,
@@ -249,6 +253,5 @@ results = {
 	'loss_g': loss_g,
 	'samples': samples
 }
-
-with open(RESULTS_FOLDER + 'losses_and_samples_mnist_conditionalDCGAN.p', 'wb') as f:
+with open(RESULTS_FOLDER + 'losses_and_samples_portraits64_conditionalDCGAN.p', 'wb') as f:
 	pickle.dump(results, f)
