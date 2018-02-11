@@ -26,7 +26,7 @@ transform = transforms.Compose(
     transforms.ToTensor(),
     transforms.Normalize((0.5,0.5,0.5), (0.5,0.5,0.5))
 ])
-cifar = torchvision.datasets.CIFAR10('../data', train=True, download=True, transform=transform)
+cifar = datasets.CIFAR10('../data', train=True, download=True, transform=transform)
 dataloader = torch.utils.data.DataLoader(cifar, batch_size=batch_size, shuffle=True, num_workers=2)
 
 
@@ -162,7 +162,7 @@ if gpu:
 	criterion.cuda()
 	ones = ones.cuda()
 	zeros = zeros.cuda()
-	fixed_z = fixed_noise.cuda()
+	fixed_z = fixed_z.cuda()
 	fixed_y_g = fixed_y_g.cuda()
 	#fixed_y_d = fixed_y_d.cuda()
 

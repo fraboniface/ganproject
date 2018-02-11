@@ -132,6 +132,9 @@ for epoch in tqdm(range(1,n_epochs+1)):
 
 	for i, data in enumerate(dataloader):
 		img, _ = data
+		if img.size(0) < batch_size:
+			break
+
 		if gpu:
 			img = img.cuda()
 

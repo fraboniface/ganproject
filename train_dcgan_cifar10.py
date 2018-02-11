@@ -11,7 +11,7 @@ import torchvision.utils as vutils
 
 from tqdm import tqdm
 
-SAVE_FOLDER = './samples_DCGAN_CIFAR10'
+SAVE_FOLDER = './samples_dcgan_cifar10'
 
 gpu = torch.cuda.is_available()
 

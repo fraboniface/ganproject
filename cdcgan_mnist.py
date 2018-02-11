@@ -162,7 +162,7 @@ if gpu:
 	criterion.cuda()
 	ones = ones.cuda()
 	zeros = zeros.cuda()
-	fixed_z = fixed_noise.cuda()
+	fixed_z = fixed_z.cuda()
 	fixed_y_g = fixed_y_g.cuda()
 	#fixed_y_d = fixed_y_d.cuda()
 
