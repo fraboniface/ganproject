@@ -78,8 +78,8 @@ class ConditionalDiscriminator(nn.Module):
     def __init__(self, num_features=n_feature_maps):
         super(ConditionalDiscriminator, self).__init__()
         #32x32
-        self.conv_image = nn.Conv2d(n_channels, num_features/2, 4, 2, 1, bias=False)
-        self.conv_label = nn.Conv2d(n_classes, num_features/2, 4, 2, 1, bias=False)
+        self.conv_image = nn.Conv2d(n_channels, int(num_features/2), 4, 2, 1, bias=False)
+        self.conv_label = nn.Conv2d(n_classes, int(num_features/2), 4, 2, 1, bias=False)
 
         self.main = nn.Sequential(
             nn.LeakyReLU(0.2, inplace=True),
@@ -147,7 +147,7 @@ fixed_y = torch.LongTensor(fixed_y)
 fixed_y_g = onehot[fixed_y]
 #fixed_y_d = fill[fixed_y] # we don't actually use it
 
-fixed_z Variable(fixed_z, volatile=True)
+fixed_z = Variable(fixed_z, volatile=True)
 fixed_y_g = Variable(fixed_y_g, volatile=True)
 #fixed_y_d = Variable(fixed_y_d, volatile=True)
 
@@ -175,7 +175,7 @@ loss_g = []
 for epoch in tqdm(range(1,n_epochs+1)):
 	for img, labels in dataloader:
 
-		labels = onehot[labels]
+		labels = fill[labels]
 		if gpu:
 			img = img.cuda()
 			labels = labels.cuda()
