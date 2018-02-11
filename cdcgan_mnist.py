@@ -13,23 +13,26 @@ from tqdm import tqdm
 
 SAMPLES_FOLDER = './mnist_samples'
 RESULTS_FOLDER = './results/'
-N_CLASSES = 10
 
-gpu = torch.cuda.is_available()
+n_classes = 10
+img_size = 32
+n_channels = 1
+n_feature_maps = 64
+n_epochs = 20
+batch_size = 50
 
 transform = transforms.Compose(
 [
+	transforms.Scale(img_size),
     transforms.ToTensor(),
     transforms.Normalize((0.5,0.5,0.5), (0.5,0.5,0.5))
 ])
 mnist = datasets.MNIST('../data', train=True, download=True, transform=transform)
-
-batch_size = 50
 dataloader = torch.utils.data.DataLoader(mnist, batch_size=batch_size, shuffle=True, num_workers=2)
 
-def onehot(batch,n_classes=N_CLASSES):
-	ones = torch.sparse.torch.eye(n_classes)
-	return ones.index_select(0,batch).view(-1,n_classes,1,1)
+#def onehot(batch,n_classes=N_CLASSES):
+#	ones = torch.sparse.torch.eye(n_classes)
+#	return ones.index_select(0,batch).view(-1,n_classes,1,1)
 
 #custom weights init
 def weights_init(m):
@@ -42,20 +45,24 @@ def weights_init(m):
 
 
 class ConditionalGenerator(nn.Module):
-    def __init__(self, zdim=100, ydim=N_CLASSES, num_features=64):
+    def __init__(self, zdim=100, num_features=n_feature_maps):
         super(ConditionalGenerator, self).__init__()
-        self.deconv_noise = nn.ConvTranspose2d(zdim, num_features, 7, 1, 0, bias=False)
-        self.deconv_label = nn.ConvTranspose2d(ydim, num_features, 7, 1, 0, bias=False)
+        self.deconv_noise = nn.ConvTranspose2d(zdim, 2*num_features, 4, 1, 0, bias=False)
+        self.deconv_label = nn.ConvTranspose2d(n_classes, 2*num_features, 4, 1, 0, bias=False)
         self.main = nn.Sequential(
+        	#4x4
+            nn.BatchNorm2d(4*num_features),
+            nn.ReLU(True),
+            nn.ConvTranspose2d(4*num_features,2*num_features, 4, 2, 1, bias=False),
+            #8x8
             nn.BatchNorm2d(2*num_features),
             nn.ReLU(True),
-            #7x7
             nn.ConvTranspose2d(2*num_features, num_features, 4, 2, 1, bias=False),
+            #16x16
             nn.BatchNorm2d(num_features),
             nn.ReLU(True),
-            #14x14
-            nn.ConvTranspose2d(num_features, 1, 4, 2, 1, bias=False),
-            #28x28 -> output
+            nn.ConvTranspose2d(num_features, n_channels, 4, 2, 1, bias=False),
+            #32x32
             nn.Tanh()
         )
         
@@ -63,41 +70,47 @@ class ConditionalGenerator(nn.Module):
     	z = self.deconv_noise(z)
     	y = self.deconv_label(y)
     	x = torch.cat([z,y], 1)
+    	# same to apply batch norm and relu before or after concatenating
     	return self.main(x)
 
 
 class ConditionalDiscriminator(nn.Module):
-    def __init__(self, ydim=N_CLASSES, num_features=32):
+    def __init__(self, num_features=n_feature_maps):
         super(ConditionalDiscriminator, self).__init__()
+        #32x32
+        self.conv_image = nn.Conv2d(n_channels, num_features/2, 4, 2, 1, bias=False)
+        self.conv_label = nn.Conv2d(n_classes, num_features/2, 4, 2, 1, bias=False)
+
         self.main = nn.Sequential(
-            #28x28
-            nn.Conv2d(1, num_features, 4, 2, 1, bias=False),
             nn.LeakyReLU(0.2, inplace=True),
-            #14x14
+            #16x16
             nn.Conv2d(num_features, 2*num_features, 4, 2, 1, bias=False),
+            #8x8
             nn.BatchNorm2d(2*num_features),
             nn.LeakyReLU(0.2, inplace=True),
-            #7x7
+            nn.Conv2d(2*num_features, 4*num_features, 4, 2, 1, bias=False),
+            #4x4
+            nn.BatchNorm2d(4*num_features),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Conv2d(4*num_features, 1, 4, 1, 0, bias=False),
+            #1x1
+            nn.Sigmoid()
         )
-        self.deconv_label = nn.ConvTranspose2d(ydim, 2*num_features, 7, 1, 0, bias=False)
-        self.last = nn.Conv2d(4*num_features, 1, 7, 1, 0, bias=False)
         
     def  forward(self, x, y):
-    	x = self.main(x) #7x7x(2*num_features)
-    	y = F.leaky_relu(self.deconv_label(y), 0.2) #idem
-    	merge = torch.cat([x,y], 1)
-    	# 7x7x(4*num_features)
-    	logit = self.last(merge)
-    	#1x1x1
-    	output = F.sigmoid(logit)
+    	# y is filled to have shape batch_size x n_classes x img_size x img_size
+    	x = self.conv_image(x)
+    	y = self.conv_label(y)
+    	z = torch.cat([x,y], 1)
+    	output = self.main(z)
     	return output.view(-1, 1).squeeze(1)
 
 
 z_size = 100
-G = ConditionalGenerator(z_size)
+G = ConditionalGenerator(z_size, n_feature_maps)
 G.apply(weights_init)
 
-D = ConditionalDiscriminator()
+D = ConditionalDiscriminator(n_feature_maps)
 D.apply(weights_init)
 
 lr = 2e-4
@@ -108,29 +121,50 @@ d_optimiser = optim.Adam(D.parameters(), lr=lr, betas=(beta1, beta2))
 
 criterion = nn.BCELoss()
 
-ones = 0.9*Variable(torch.ones(batch_size)) #label smoothing
-zeros = Variable(torch.zeros(batch_size))
+# label preprocessing
+# onehot is a tensor containing the corresponding n_classesx1x1 tensor to a label 
+# fill is the same but contains a  n_classes x img_size x img_size for each class
+# onehot is for inputs to the generator and fill to the generator 
+onehot = torch.zeros(n_classes, n_classes)
+onehot = onehot.scatter_(1, torch.LongTensor(np.arange(10)).view(10,1), 1).view(10, 10, 1, 1)
+fill = torch.zeros([n_classes, n_classes, img_size, img_size])
+for i in range(10):
+    fill[i, i, :, :] = 1
 
 # we generate 10 samples for each class and each class has the same noise vector
 n_samples_per_class  = 10
-fixed_noise = Variable(torch.FloatTensor(n_samples_per_class, z_size, 1, 1).normal_(0,1))
-fixed_noise = fixed_noise.repeat(N_CLASSES,1,1,1)
-label_vectors = torch.FloatTensor()
-for i in range(N_CLASSES):
-    tmp = onehot(i*torch.ones(n_samples_per_class).long())
-    label_vectors = torch.cat([label_vectors,tmp])
+fixed_z = torch.FloatTensor(n_samples_per_class, z_size, 1, 1).normal_(0,1)
+fixed_z = fixed_z.repeat(n_classes,1,1,1)
+fixed_y = torch.FloatTensor()
+for i in range(n_classes):
+    tmp = onehot[i*torch.ones(n_samples_per_class).long()]
+    fixed_y = torch.cat([fixed_y,tmp])
 
-label_vectors = Variable(label_vectors)
+fixed_y = []
+for i in range(n_classes):
+	fixed_y += [i]*n_samples_per_class
+fixed_y = torch.LongTensor(fixed_y)
+fixed_y_g = onehot[fixed_y]
+#fixed_y_d = fill[fixed_y] # we don't actually use it
+
+fixed_z Variable(fixed_z, volatile=True)
+fixed_y_g = Variable(fixed_y_g, volatile=True)
+#fixed_y_d = Variable(fixed_y_d, volatile=True)
+
+ones = 0.9*Variable(torch.ones(batch_size)) # label smoothing
+zeros = Variable(torch.zeros(batch_size))
 
 # to GPU
+gpu = torch.cuda.is_available()
 if gpu:
 	G.cuda()
 	D.cuda()
 	criterion.cuda()
 	ones = ones.cuda()
 	zeros = zeros.cuda()
-	fixed_noise = fixed_noise.cuda()
-	label_vectors = label_vectors.cuda()
+	fixed_z = fixed_noise.cuda()
+	fixed_y_g = fixed_y_g.cuda()
+	#fixed_y_d = fixed_y_d.cuda()
 
 samples = []
 loss_d_real = []
@@ -138,11 +172,10 @@ loss_d_fake = []
 loss_d = []
 loss_g = []
 
-n_epochs = 20
 for epoch in tqdm(range(1,n_epochs+1)):
-	for i, data in enumerate(dataloader):
-		img, labels = data
-		labels = onehot(labels)
+	for img, labels in dataloader:
+
+		labels = onehot[labels]
 		if gpu:
 			img = img.cuda()
 			labels = labels.cuda()
@@ -161,14 +194,19 @@ for epoch in tqdm(range(1,n_epochs+1)):
 
 		#fake data
 		z = torch.FloatTensor(batch_size, z_size, 1, 1).normal_(0,1)
-		y = onehot(torch.LongTensor(batch_size).random_(0,N_CLASSES))
+		y = torch.LongTensor(batch_size).random_(0,n_classes)
+		y_g = onehot[y]
+		y_d = fill[y]
 		if gpu:
 			z = z.cuda()
-			y = y.cuda()
+			y_g = y_g.cuda()
+			y_d = y_d.cuda()
+
 		z = Variable(z)
-		y = Variable(y)
-		fake_data = G(z, y)
-		d_fake = D(fake_data.detach(), y)
+		y_g = Variable(y_g)
+		y_d = Variable(y_d)
+		fake_data = G(z, y_g)
+		d_fake = D(fake_data.detach(), y_d)
 		d_fake_error = criterion(d_fake, zeros)
 		loss_d_fake.append(d_fake_error)
 		d_fake_error.backward()
@@ -179,20 +217,25 @@ for epoch in tqdm(range(1,n_epochs+1)):
 		# GENERATOR STEP
 		G.zero_grad()
 		z = torch.FloatTensor(batch_size, z_size, 1, 1).normal_(0,1)
-		y = onehot(torch.LongTensor(batch_size).random_(0,N_CLASSES))
+		y = torch.LongTensor(batch_size).random_(0,n_classes)
+		y_g = onehot[y]
+		y_d = fill[y]
 		if gpu:
 			z = z.cuda()
-			y = y.cuda()
+			y_g = y_g.cuda()
+			y_d = y_d.cuda()
+
 		z = Variable(z)
-		y = Variable(y)
-		gen_data = G(z, y)
-		d_output = D(gen_data, y)
+		y_g = Variable(y_g)
+		y_d = Variable(y_d)
+		gen_data = G(z, y_g)
+		d_output = D(gen_data, y_d)
 		g_error = criterion(d_output, ones)
 		loss_g.append(g_error)
 		g_error.backward()
 		g_optimiser.step()
 
-	fake = G(fixed_noise, label_vectors)
+	fake = G(fixed_z, fixed_y_g)
 	samples.append(fake.data.cpu().numpy())
 	vutils.save_image(fake.data, '%s/conditional_samples_epoch_%03d.png' % (SAMPLES_FOLDER, epoch), normalize=True)
 
