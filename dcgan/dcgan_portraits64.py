@@ -6,12 +6,12 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torch.autograd import Variable
 import torchvision
-import torchvision.transforms as transforms
+from torchvision import transforms, datasets
 import torchvision.utils as vutils
 
 from tqdm import tqdm
 
-SAVE_FOLDER = './samples_DCGAN_MNIST'
+SAVE_FOLDER = '../results/samples/paintings/portraits64/'
 
 gpu = torch.cuda.is_available()
 
@@ -20,10 +20,10 @@ transform = transforms.Compose(
     transforms.ToTensor(),
     transforms.Normalize((0.5,0.5,0.5), (0.5,0.5,0.5))
 ])
-mnist = torchvision.datasets.MNIST('../data', train=True, download=True, transform=transform)
 
-batch_size = 50
-dataloader = torch.utils.data.DataLoader(mnist, batch_size=batch_size, shuffle=True, num_workers=2)
+batch_size = 100
+portraits = datasets.ImageFolder('../paintings64/portraits/', transform=transform)
+dataloader = torch.utils.data.DataLoader(portraits, batch_size=batch_size, shuffle=True, num_workers=2)
 
 #custom weights init
 def weights_init(m):
@@ -35,51 +35,62 @@ def weights_init(m):
 		m.bias.data.fill_(0)
 
 class Generator(nn.Module):
-    def __init__(self, zdim=100, num_features=64):
+    def __init__(self, zdim=100, n_feature_maps=64):
         super(Generator, self).__init__()
-        self.zdim = zdim
-        self.num_features = num_features
         self.main = nn.Sequential(
-            #1x1
-            nn.ConvTranspose2d(zdim, 2*num_features, 7, 1, 0, bias=False),
-            nn.BatchNorm2d(2*num_features),
+        	#1x1
+        	nn.ConvTranspose2d(zdim, 8*n_feature_maps, 4, 1, 0, bias=False),
+            nn.BatchNorm2d(8*n_feature_maps),
             nn.ReLU(True),
-            #7x7
-            nn.ConvTranspose2d(2*num_features, num_features, 4, 2, 1, bias=False),
-            nn.BatchNorm2d(num_features),
+            #4x4
+            nn.ConvTranspose2d(8*n_feature_maps, 4*n_feature_maps, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(4*n_feature_maps),
             nn.ReLU(True),
-            #14x14
-            nn.ConvTranspose2d(num_features, 1, 4, 2, 1, bias=False),
-            #28x28 -> output
+            #8x8
+            nn.ConvTranspose2d(4*n_feature_maps, 2*n_feature_maps, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(2*n_feature_maps),
+            nn.ReLU(True),
+            #16x16
+            nn.ConvTranspose2d(2*n_feature_maps, n_feature_maps, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(n_feature_maps),
+            nn.ReLU(True),
+            #32x32
+            nn.ConvTranspose2d(n_feature_maps, 3, 4, 2, 1, bias=False),
+            #64x64
             nn.Tanh()
         )
         
-    def  forward(self, x, y):
-    	#define convtranspose in init, apply it to x and y, concat, apply rest of main
+    def  forward(self, x):
         return self.main(x)
     
 class Discriminator(nn.Module):
-    def __init__(self, num_features=64):
+    def __init__(self, n_feature_maps=64):
         super(Discriminator, self).__init__()
         self.main = nn.Sequential(
-            #28x28
-            nn.Conv2d(1, num_features, 4, 2, 1, bias=False),
+            #64x64
+            nn.Conv2d(3, n_feature_maps, 4, 2, 1, bias=False),
             nn.LeakyReLU(0.2, inplace=True),
-            #14x14
-            nn.Conv2d(num_features, 2*num_features, 4, 2, 1, bias=False),
-            nn.BatchNorm2d(2*num_features),
+            #32x32
+            nn.Conv2d(n_feature_maps, 2*n_feature_maps, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(2*n_feature_maps),
             nn.LeakyReLU(0.2, inplace=True),
-            #7x7
-            nn.Conv2d(2*num_features, 1, 7, 1, 0, bias=False),
-            # 1x1
+            #16x16
+            nn.Conv2d(2*n_feature_maps, 4*n_feature_maps, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(4*n_feature_maps),
+            nn.LeakyReLU(0.2, inplace=True),
+            #8x8
+            nn.Conv2d(4*n_feature_maps, 8*n_feature_maps, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(8*n_feature_maps),
+            nn.LeakyReLU(0.2, inplace=True),
+            # 4x4
+            nn.Conv2d(8*n_feature_maps, 1, 4, 1, 0, bias=False),
+            #1x1
             nn.Sigmoid()
         )
         
     def  forward(self, x):
         output = self.main(x)
         return output.view(-1, 1).squeeze(1)
-
-
 
 
 z_size = 100
@@ -97,7 +108,9 @@ d_optimiser = optim.Adam(D.parameters(), lr=lr, betas=(beta1, beta2))
 
 criterion = nn.BCELoss()
 
-ones = Variable(torch.ones(batch_size))
+#ones = Variable(torch.ones(batch_size))
+#use line below for one-sided label smoothing
+ones = 0.9*Variable(torch.ones(batch_size))
 zeros = Variable(torch.zeros(batch_size))
 
 fixed_noise = Variable(torch.FloatTensor(batch_size, z_size, 1, 1).normal_(0,1))
@@ -111,13 +124,14 @@ if gpu:
 	zeros = zeros.cuda()
 	fixed_noise = fixed_noise.cuda()
 
+
 n_epochs = 50
 for epoch in tqdm(range(1,n_epochs+1)):
-	fake = G(fixed_noise)
-	vutils.save_image(fake.data, '%s/fake_samples_epoch_%03d.png' % (SAVE_FOLDER, epoch), normalize=True)
-
 	for i, data in enumerate(dataloader):
 		img, _ = data
+		if img.size(0) < batch_size:
+			break
+
 		if gpu:
 			img = img.cuda()
 
@@ -158,6 +172,5 @@ for epoch in tqdm(range(1,n_epochs+1)):
 		g_error.backward()
 		g_optimiser.step()
 
-		#print('[%d/%d][%d/%d] Loss_D: %.4f Loss_G: %.4f D(x): %.4f D(G(z)): %.4f / %.4f'
-		#% (epoch, n_epochs, i, len(dataloader),
-		#loss_d.data[0], g_error.data[0], d_x, d_g_z1, d_g_z2))
+    fake = G(fixed_noise)
+    vutils.save_image(fake.data, '{}samples_epoch_{}.png'.format(SAVE_FOLDER, epoch), normalize=True, nrow=10)

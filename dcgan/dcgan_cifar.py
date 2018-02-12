@@ -11,7 +11,7 @@ import torchvision.utils as vutils
 
 from tqdm import tqdm
 
-SAVE_FOLDER = './samples_dcgan_cifar10'
+SAVE_FOLDER = '../results/samples/cifar/'
 
 gpu = torch.cuda.is_available()
 
@@ -122,9 +122,6 @@ if gpu:
 
 n_epochs = 50
 for epoch in tqdm(range(1,n_epochs+1)):
-	fake = G(fixed_noise)
-	vutils.save_image(fake.data, '%s/samples_labsmooth_epoch_%03d.png' % (SAVE_FOLDER, epoch), normalize=True)
-
 	for i, data in enumerate(dataloader):
 		img, _ = data
 		if gpu:
@@ -167,6 +164,5 @@ for epoch in tqdm(range(1,n_epochs+1)):
 		g_error.backward()
 		g_optimiser.step()
 
-		#print('[%d/%d][%d/%d] Loss_D: %.4f Loss_G: %.4f D(x): %.4f D(G(z)): %.4f / %.4f'
-		#% (epoch, n_epochs, i, len(dataloader),
-		#loss_d.data[0], g_error.data[0], d_x, d_g_z1, d_g_z2))
+	fake = G(fixed_noise)
+	vutils.save_image(fake.data, '{}samples_epoch_{}.png'.format(SAVE_FOLDER, epoch), normalize=True, nrow=10)

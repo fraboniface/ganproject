@@ -11,7 +11,7 @@ import torchvision.utils as vutils
 
 from tqdm import tqdm
 
-SAVE_FOLDER = './portraits_samples'
+SAVE_FOLDER = '../results/samples/paintings/landscapes64/'
 
 gpu = torch.cuda.is_available()
 
@@ -22,24 +22,24 @@ transform = transforms.Compose(
 ])
 
 batch_size = 100
-portraits = datasets.ImageFolder('../paintings64/', transform=transform)
+portraits = datasets.ImageFolder('../paintings64/landscapes/', transform=transform)
 dataloader = torch.utils.data.DataLoader(portraits, batch_size=batch_size, shuffle=True, num_workers=2)
 
 #custom weights init
 def weights_init(m):
-	classname = m.__class__.__name__
-	if classname.find('Conv') != -1:
-		m.weight.data.normal_(0.0, 0.02)
-	elif classname.find('BatchNorm') != -1:
-		m.weight.data.normal_(1.0, 0.02)
-		m.bias.data.fill_(0)
+    classname = m.__class__.__name__
+    if classname.find('Conv') != -1:
+        m.weight.data.normal_(0.0, 0.02)
+    elif classname.find('BatchNorm') != -1:
+        m.weight.data.normal_(1.0, 0.02)
+        m.bias.data.fill_(0)
 
 class Generator(nn.Module):
     def __init__(self, zdim=100, n_feature_maps=64):
         super(Generator, self).__init__()
         self.main = nn.Sequential(
-        	#1x1
-        	nn.ConvTranspose2d(zdim, 8*n_feature_maps, 4, 1, 0, bias=False),
+            #1x1
+            nn.ConvTranspose2d(zdim, 8*n_feature_maps, 4, 1, 0, bias=False),
             nn.BatchNorm2d(8*n_feature_maps),
             nn.ReLU(True),
             #4x4
@@ -117,60 +117,60 @@ fixed_noise = Variable(torch.FloatTensor(batch_size, z_size, 1, 1).normal_(0,1))
 
 # to GPU
 if gpu:
-	G.cuda()
-	D.cuda()
-	criterion.cuda()
-	ones = ones.cuda()
-	zeros = zeros.cuda()
-	fixed_noise = fixed_noise.cuda()
+    G.cuda()
+    D.cuda()
+    criterion.cuda()
+    ones = ones.cuda()
+    zeros = zeros.cuda()
+    fixed_noise = fixed_noise.cuda()
 
 
 n_epochs = 50
 for epoch in tqdm(range(1,n_epochs+1)):
-	fake = G(fixed_noise)
-	vutils.save_image(fake.data, '%s/samples_epoch_%03d.png' % (SAVE_FOLDER, epoch), normalize=True)
+    for i, data in enumerate(dataloader):
+        img, _ = data
+        if img.size(0) < batch_size:
+            break
 
-	for i, data in enumerate(dataloader):
-		img, _ = data
-		if img.size(0) < batch_size:
-			break
+        if gpu:
+            img = img.cuda()
 
-		if gpu:
-			img = img.cuda()
+        img = Variable(img)
 
-		img = Variable(img)
+        # discriminator step
+        D.zero_grad()
+        #real data
+        d_real = D(img)
+        d_real_error = criterion(d_real, ones)
+        d_real_error.backward()
+        d_x = d_real.data.mean()
+        #fake data
+        z = torch.FloatTensor(batch_size, z_size, 1, 1).normal_(0,1)
+        if gpu:
+            z = z.cuda()
 
-		# discriminator step
-		D.zero_grad()
-		#real data
-		d_real = D(img)
-		d_real_error = criterion(d_real, ones)
-		d_real_error.backward()
-		d_x = d_real.data.mean()
-		#fake data
-		z = torch.FloatTensor(batch_size, z_size, 1, 1).normal_(0,1)
-		if gpu:
-			z = z.cuda()
+        z = Variable(z)
+        fake_data = G(z)
+        d_fake = D(fake_data.detach())
+        d_fake_error = criterion(d_fake, zeros)
+        d_fake_error.backward()
+        loss_d = d_real_error + d_fake_error
+        d_g_z1 = d_fake.data.mean()
+        d_optimiser.step()
 
-		z = Variable(z)
-		fake_data = G(z)
-		d_fake = D(fake_data.detach())
-		d_fake_error = criterion(d_fake, zeros)
-		d_fake_error.backward()
-		loss_d = d_real_error + d_fake_error
-		d_g_z1 = d_fake.data.mean()
-		d_optimiser.step()
+        # generator step
+        G.zero_grad()
+        z = torch.FloatTensor(batch_size, z_size, 1, 1).normal_(0,1)
+        if gpu:
+            z = z.cuda()
 
-		# generator step
-		G.zero_grad()
-		z = torch.FloatTensor(batch_size, z_size, 1, 1).normal_(0,1)
-		if gpu:
-			z = z.cuda()
+        z = Variable(z)
+        gen_data = G(z)
+        d_output = D(gen_data)
+        d_g_z2 = d_output.data.mean()
+        g_error = criterion(d_output, ones)
+        g_error.backward()
+        g_optimiser.step()
 
-		z = Variable(z)
-		gen_data = G(z)
-		d_output = D(gen_data)
-		d_g_z2 = d_output.data.mean()
-		g_error = criterion(d_output, ones)
-		g_error.backward()
-		g_optimiser.step()
+    fake = G(fixed_noise)
+    vutils.save_image(fake.data, '{}samples_epoch_{}.png'.format(SAVE_FOLDER, epoch), normalize=True, nrow=10)

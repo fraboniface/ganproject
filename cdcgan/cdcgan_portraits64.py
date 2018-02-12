@@ -11,8 +11,8 @@ import torchvision.utils as vutils
 import pickle
 from tqdm import tqdm
 
-SAMPLES_FOLDER = './portraits_samples'
-RESULTS_FOLDER = './results/'
+SAVE_FOLDER = '../results/samples/paintings/portraits64/'
+RESULTS_FOLDER = '../saved_data/'
 
 n_classes = 21
 img_size = 64
@@ -193,7 +193,6 @@ for epoch in tqdm(range(1,n_epochs+1)):
 		#real data
 		d_real = D(img,labels)
 		d_real_error = criterion(d_real, ones)
-		loss_d_real.append(d_real_error)
 		d_real_error.backward()
 
 		#fake data
@@ -212,9 +211,7 @@ for epoch in tqdm(range(1,n_epochs+1)):
 		fake_data = G(z, y_g)
 		d_fake = D(fake_data.detach(), y_d)
 		d_fake_error = criterion(d_fake, zeros)
-		loss_d_fake.append(d_fake_error)
 		d_fake_error.backward()
-		loss_d.append(d_real_error + d_fake_error)
 
 		d_optimiser.step()
 
@@ -235,23 +232,27 @@ for epoch in tqdm(range(1,n_epochs+1)):
 		gen_data = G(z, y_g)
 		d_output = D(gen_data, y_d)
 		g_error = criterion(d_output, ones)
-		loss_g.append(g_error)
 		g_error.backward()
 		g_optimiser.step()
 
+		loss_d_real.append(d_real_error.data.cpu().numpy())
+		loss_d_fake.append(d_fake_error.data.cpu().numpy())
+		loss_d.append(d_real_error.data.cpu().numpy() + d_fake_error.data.cpu().numpy())
+		loss_g.append(g_error.data.cpu().numpy())
+
 	fake = G(fixed_z, fixed_y_g)
 	samples.append(fake.data.cpu().numpy())
-	vutils.save_image(fake.data, '%s/conditional_samples_epoch_%03d.png' % (SAMPLES_FOLDER, epoch), normalize=True)
+	vutils.save_image(fake.data, '{}cGAN_samples_epoch_{}.png'.format(SAVE_FOLDER, epoch), normalize=True, nrow=10)
 
 # save everything
-torch.save(G.state_dict(), RESULTS_FOLDER + 'portraits64_conditional_generator_{}epochs'.format(n_epochs))
-torch.save(D.state_dict(), RESULTS_FOLDER + 'portraits64_conditional_discriminator_{}epochs'.format(n_epochs))
+torch.save(G.state_dict(), RESULTS_FOLDER + 'portraits64_cGAN_generator_{}epochs'.format(n_epochs))
+torch.save(D.state_dict(), RESULTS_FOLDER + 'portraits64_cGAN_discriminator_{}epochs'.format(n_epochs))
 results = {
-	'loss_d': loss_d,
-	'loss_d_real': loss_d_real,
-	'loss_d_fake': loss_d_fake,
-	'loss_g': loss_g,
+	'D_loss': loss_d,
+	'D_real_loss': loss_d_real,
+	'D_fake_loss': loss_d_fake,
+	'G_loss': loss_g,
 	'samples': samples
 }
-with open(RESULTS_FOLDER + 'losses_and_samples_portraits64_conditionalDCGAN.p', 'wb') as f:
+with open(RESULTS_FOLDER + 'losses_and_samples_portraits64_cGAN.p', 'wb') as f:
 	pickle.dump(results, f)
