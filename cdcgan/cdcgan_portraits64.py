@@ -14,7 +14,7 @@ from tqdm import tqdm
 # THIS IS A WGAN
 
 SAVE_FOLDER = '../results/samples/paintings/portraits64/'
-RESULTS_FOLDER = '../saved_data/'
+RESULTS_FOLDER = '../results/saved_data/'
 
 n_classes = 21
 img_size = 64
