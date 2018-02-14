@@ -275,6 +275,8 @@ results = {
 
 for epoch in tqdm(range(1,n_epochs+1)):
 	for img, labels in dataloader:
+		if img.size(0) < batch_size:
+			continue
 		if gpu:
 			img = img.cuda()
 			labels = labels.cuda()
@@ -339,7 +341,7 @@ for epoch in tqdm(range(1,n_epochs+1)):
 		results['gen_Ls'].append(gen_Ls.data.cpu().numpy())
 		gen_Lc = class_criterion(D_gen_class, y)
 		results['gen_Lc'].append(gen_Lc.data.cpu().numpy())
-		G_error = gen_Lc - gen_Ls
+		G_error = gen_Ls + gen_Lc
 		results['G_loss'].append(G_error.data.cpu().numpy())
 		G_error.backward()
 
