@@ -11,15 +11,19 @@ import torchvision.utils as vutils
 import pickle
 from tqdm import tqdm
 
+# THIS IS A WGAN
+
 SAVE_FOLDER = '../results/samples/paintings/portraits64/'
-RESULTS_FOLDER = '../saved_data/'
+RESULTS_FOLDER = '../results/saved_data/'
 
 n_classes = 21
 img_size = 64
 n_channels = 3
 n_feature_maps = 128
-n_epochs = 50
+n_epochs = 200
 batch_size = 100
+D_steps = 5
+clamp = 1e-2
 
 transform = transforms.Compose(
 [
@@ -74,9 +78,9 @@ class ConditionalGenerator(nn.Module):
     	return self.main(x)
 
 
-class ConditionalDiscriminator(nn.Module):
+class WConditionalDiscriminator(nn.Module):
     def __init__(self, num_features=n_feature_maps):
-        super(ConditionalDiscriminator, self).__init__()
+        super(WConditionalDiscriminator, self).__init__()
         #32x32
         self.conv_image = nn.Conv2d(n_channels, int(num_features/2), 4, 2, 1, bias=False)
         self.conv_label = nn.Conv2d(n_classes, int(num_features/2), 4, 2, 1, bias=False)
@@ -98,7 +102,6 @@ class ConditionalDiscriminator(nn.Module):
             # 4x4
             nn.Conv2d(8*n_feature_maps, 1, 4, 1, 0, bias=False),
             #1x1
-            nn.Sigmoid()
         )
         
     def  forward(self, x, y):
@@ -114,16 +117,12 @@ z_size = 100
 G = ConditionalGenerator(z_size, n_feature_maps)
 G.apply(weights_init)
 
-D = ConditionalDiscriminator(n_feature_maps)
+D = WConditionalDiscriminator(n_feature_maps)
 D.apply(weights_init)
 
-lr = 2e-4
-beta1 = 0.5
-beta2 = 0.999
-g_optimiser = optim.Adam(G.parameters(), lr=lr, betas=(beta1, beta2))
-d_optimiser = optim.Adam(D.parameters(), lr=lr, betas=(beta1, beta2))
-
-criterion = nn.BCELoss()
+lr = 5e-5
+g_optimiser = optim.RMSprop(G.parameters(),lr=lr)
+d_optimiser = optim.RMSprop(G.parameters(),lr=lr)
 
 # label preprocessing
 # onehot is a tensor containing the corresponding n_classesx1x1 tensor to a label 
@@ -171,49 +170,59 @@ if gpu:
 	#fixed_y_d = fixed_y_d.cuda()
 
 samples = []
-loss_d_real = []
-loss_d_fake = []
 loss_d = []
 loss_g = []
 
 for epoch in tqdm(range(1,n_epochs+1)):
-	for img, labels in dataloader:
+	data_iter = iter(dataloader)
+	i = 0
+	while i < len(dataloader):
+		# insert code where D_steps is set to 100 once in a while, if needed
 
-		labels = fill[labels]
-		if gpu:
-			img = img.cuda()
-			labels = labels.cuda()
+		# DISCRIMINATOR TRAINING
+		j = 0
+		while j < D_steps and i < len(dataloader):
+			j += 1
 
-		img = Variable(img)
-		labels = Variable(labels)
+			for p in D.parameters():
+				p.data.clamp_(-clamp, clamp)
 
-		# DISCRIMINATOR STEP
-		D.zero_grad()
+			img, labels = data_iter.next()
+			i += 1
+			labels = fill[labels]
+			if gpu:
+				img = img.cuda()
+				labels = labels.cuda()
 
-		#real data
-		d_real = D(img,labels)
-		d_real_error = criterion(d_real, ones)
-		d_real_error.backward()
+			img = Variable(img)
+			labels = Variable(labels)
 
-		#fake data
-		z = torch.FloatTensor(batch_size, z_size, 1, 1).normal_(0,1)
-		y = torch.LongTensor(batch_size).random_(0,n_classes)
-		y_g = onehot[y]
-		y_d = fill[y]
-		if gpu:
-			z = z.cuda()
-			y_g = y_g.cuda()
-			y_d = y_d.cuda()
+			D.zero_grad()
 
-		z = Variable(z)
-		y_g = Variable(y_g)
-		y_d = Variable(y_d)
-		fake_data = G(z, y_g)
-		d_fake = D(fake_data.detach(), y_d)
-		d_fake_error = criterion(d_fake, zeros)
-		d_fake_error.backward()
+			#real data
+			d_real = D(img,labels)
+			d_real_mean = torch.mean(d_real)
 
-		d_optimiser.step()
+			#fake data
+			z = torch.FloatTensor(batch_size, z_size, 1, 1).normal_(0,1)
+			y = torch.LongTensor(batch_size).random_(0,n_classes)
+			y_g = onehot[y]
+			y_d = fill[y]
+			if gpu:
+				z = z.cuda()
+				y_g = y_g.cuda()
+				y_d = y_d.cuda()
+
+			z = Variable(z)
+			y_g = Variable(y_g)
+			y_d = Variable(y_d)
+			fake_data = G(z, y_g)
+			d_fake = D(fake_data.detach(), y_d)
+			d_fake_mean = torch.mean(d_fake)
+
+			d_error = -(d_real_mean - d_fake_mean)
+
+			d_optimiser.step()
 
 		# GENERATOR STEP
 		G.zero_grad()
@@ -231,28 +240,25 @@ for epoch in tqdm(range(1,n_epochs+1)):
 		y_d = Variable(y_d)
 		gen_data = G(z, y_g)
 		d_output = D(gen_data, y_d)
-		g_error = criterion(d_output, ones)
+		g_error = -torch.mean(d_output)
 		g_error.backward()
 		g_optimiser.step()
 
-		loss_d_real.append(d_real_error.data.cpu().numpy())
-		loss_d_fake.append(d_fake_error.data.cpu().numpy())
-		loss_d.append(d_real_error.data.cpu().numpy() + d_fake_error.data.cpu().numpy())
+
+		loss_d.append(d_error.data.cpu().numpy())
 		loss_g.append(g_error.data.cpu().numpy())
 
 	fake = G(fixed_z, fixed_y_g)
 	samples.append(fake.data.cpu().numpy())
-	vutils.save_image(fake.data, '{}cGAN_samples_epoch_{}.png'.format(SAVE_FOLDER, epoch), normalize=True, nrow=10)
+	vutils.save_image(fake.data, '{}cWGAN_samples_epoch_{}.png'.format(SAVE_FOLDER, epoch), normalize=True, nrow=10)
 
 # save everything
-torch.save(G.state_dict(), RESULTS_FOLDER + 'portraits64_cGAN_generator_{}epochs'.format(n_epochs))
-torch.save(D.state_dict(), RESULTS_FOLDER + 'portraits64_cGAN_discriminator_{}epochs'.format(n_epochs))
+torch.save(G.state_dict(), RESULTS_FOLDER + 'portraits64_cWGAN_generator_{}epochs'.format(n_epochs))
+torch.save(D.state_dict(), RESULTS_FOLDER + 'portraits64_cWGAN_discriminator_{}epochs'.format(n_epochs))
 results = {
 	'D_loss': loss_d,
-	'D_real_loss': loss_d_real,
-	'D_fake_loss': loss_d_fake,
 	'G_loss': loss_g,
 	'samples': samples
 }
-with open(RESULTS_FOLDER + 'losses_and_samples_portraits64_cGAN.p', 'wb') as f:
+with open(RESULTS_FOLDER + 'losses_and_samples_portraits64_cWGAN.p', 'wb') as f:
 	pickle.dump(results, f)
