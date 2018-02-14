@@ -188,6 +188,7 @@ for epoch in tqdm(range(1,n_epochs+1)):
 				p.data.clamp_(-clamp, clamp)
 
 			img, labels = data_iter.next()
+			i += 1
 			labels = fill[labels]
 			if gpu:
 				img = img.cuda()
