@@ -79,7 +79,7 @@ def weights_init(m):
 if dataset_name == 'portraits64':
 	class ACGenerator(nn.Module):
 	    def __init__(self, zdim=100, n_feature_maps=64):
-	        super(Generator, self).__init__()
+	        super(ACGenerator, self).__init__()
 	        self.main = nn.Sequential(
 	        	#1x1
 	        	nn.ConvTranspose2d(zdim+n_classes, 8*n_feature_maps, 4, 1, 0, bias=False),
@@ -98,7 +98,7 @@ if dataset_name == 'portraits64':
 	            nn.BatchNorm2d(n_feature_maps),
 	            nn.ReLU(True),
 	            #32x32
-	            nn.ConvTranspose2d(n_feature_maps, 3, 4, 2, 1, bias=False),
+	            nn.ConvTranspose2d(n_feature_maps, n_channels, 4, 2, 1, bias=False),
 	            #64x64
 	            nn.Tanh()
 	        )
@@ -145,7 +145,7 @@ if dataset_name == 'portraits64':
 else:
 	class ACGenerator(nn.Module):
 	    def __init__(self, zdim=100, n_feature_maps=64):
-	        super(Generator, self).__init__()
+	        super(ACGenerator, self).__init__()
 	        self.main = nn.Sequential(
 	        	#1x1
 	        	nn.ConvTranspose2d(zdim+n_classes, 8*n_feature_maps, 4, 1, 0, bias=False),
@@ -164,7 +164,7 @@ else:
 	            nn.BatchNorm2d(n_feature_maps),
 	            nn.ReLU(True),
 	            # 32x32
-	            nn.Conv2d(n_feature_maps, 3, 1, 1, 0, bias=False),
+	            nn.Conv2d(n_feature_maps, n_channels, 1, 1, 0, bias=False),
 	            nn.Tanh()
 	        )
 	        
@@ -188,7 +188,7 @@ else:
 	            nn.BatchNorm2d(4*n_feature_maps),
 	            nn.LeakyReLU(0.2, inplace=True),
 	            #4x4
-	            nn.Conv2d(4*n_feature_maps, n_feature_maps, 1, 1, 0, bias=False)
+	            nn.Conv2d(4*n_feature_maps, n_feature_maps, 4, 1, 0, bias=False)
 	            #1x1
 	        )
 	        self.source = nn.Sequential(
@@ -205,7 +205,7 @@ else:
 
 
 z_size = 100
-G = ConditionalGenerator(z_size, n_feature_maps)
+G = ACGenerator(z_size, n_feature_maps)
 G.apply(weights_init)
 
 D = ACDiscriminator(n_feature_maps)
