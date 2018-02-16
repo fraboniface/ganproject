@@ -21,11 +21,11 @@ RESULTS_FOLDER = '../results/saved_data/'
 batch_size = 100
 
 if dataset_name == 'paintings64':
-	n_classes = 2
+	n_classes = 6
 	img_size = 64
 	n_channels = 3
 	n_feature_maps = 128
-	n_epochs = 70
+	n_epochs = 50
 
 elif dataset_name == 'cifar':
 	n_classes = 10
@@ -60,12 +60,12 @@ else:
 if dataset_name == 'paintings64':
 	dataset = datasets.ImageFolder('../paintings64/', transform=transform)
 elif dataset_name == 'cifar':
-	dataset = datasets.CIFAR10('../data', train=True, download=True, transform=transform)
+	dataset = datasets.CIFAR10('../data', train=True, transform=transform)
 elif dataset_name == 'mnist':
-	dataset = datasets.MNIST('../data', train=True, download=True, transform=transform)
+	dataset = datasets.MNIST('../data', train=True, transform=transform)
 
 dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=2)
-
+print(dataset.classes)
 
 #custom weights init
 def weights_init(m):
@@ -76,7 +76,14 @@ def weights_init(m):
 		m.weight.data.normal_(1.0, 0.02)
 		m.bias.data.fill_(0)
 
+source_criterion = nn.BCELoss()
+
 if dataset_name == 'paintings64':
+	n_examples = len(dataset)
+	class_weights = [7198,4089,10983,11545,12926,5702] #not ideal hard-coded like this
+	class_weights = torch.Tensor(class_weights)/n_examples
+	class_criterion = nn.CrossEntropyLoss(class_weights)
+
 	class ACGenerator(nn.Module):
 	    def __init__(self, zdim=100, n_feature_maps=64):
 	        super(ACGenerator, self).__init__()
@@ -143,6 +150,8 @@ if dataset_name == 'paintings64':
 	    	return source, class_logits
 
 else:
+	class_criterion = nn.CrossEntropyLoss()
+
 	class ACGenerator(nn.Module):
 	    def __init__(self, zdim=100, n_feature_maps=64):
 	        super(ACGenerator, self).__init__()
@@ -236,9 +245,6 @@ fixed_z = Variable(fixed_z, volatile=True)
 
 ones = Variable(torch.ones(batch_size))
 zeros = Variable(torch.zeros(batch_size))
-
-source_criterion = nn.BCELoss()
-class_criterion = nn.CrossEntropyLoss()
 
 # to GPU
 gpu = torch.cuda.is_available()
