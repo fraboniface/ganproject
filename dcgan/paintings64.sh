@@ -5,7 +5,7 @@
 #SBATCH --mem=16000  # memory in Mb
 #SBATCH -o sample_experiment_outfile  # send stdout to sample_experiment_outfile
 #SBATCH -e sample_experiment_errfile  # send stderr to sample_experiment_errfile
-#SBATCH -t 2:00:00  # time requested in hour:minute:secon
+#SBATCH -t 4:00:00  # time requested in hour:minute:secon
 export CUDA_HOME=/opt/cuda-8.0.44
 
 export CUDNN_HOME=/opt/cuDNN-6.0_8.0
@@ -30,4 +30,4 @@ export TMP=/disk/scratch/${STUDENT_ID}/
 # Activate the relevant virtual environment:
 source /home/${STUDENT_ID}/miniconda3/bin/activate mlp
 
-python dcgan_cifar.py
+python dcgan.py paintings64
