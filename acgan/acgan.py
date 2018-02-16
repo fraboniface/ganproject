@@ -13,15 +13,15 @@ import sys
 from tqdm import tqdm
 
 dataset_name = sys.argv[1]
-assert dataset_name in ['portraits64', 'mnist', 'cifar']
+assert dataset_name in ['paintings64', 'mnist', 'cifar']
 
 SAVE_FOLDER = '../results/samples/{}/'.format(dataset_name)
 RESULTS_FOLDER = '../results/saved_data/'
 
 batch_size = 100
 
-if dataset_name == 'portraits64':
-	n_classes = 21
+if dataset_name == 'paintings64':
+	n_classes = 2
 	img_size = 64
 	n_channels = 3
 	n_feature_maps = 128
@@ -31,7 +31,7 @@ elif dataset_name == 'cifar':
 	n_classes = 10
 	img_size = 32
 	n_channels = 3
-	n_feature_maps = 64
+	n_feature_maps = 128
 	n_epochs = 50
 	
 elif dataset_name == 'mnist':
@@ -57,8 +57,8 @@ else:
 	])
 
 
-if dataset_name == 'portraits64':
-	dataset = datasets.ImageFolder('../paintings64/portraits/', transform=transform)
+if dataset_name == 'paintings64':
+	dataset = datasets.ImageFolder('../paintings64/', transform=transform)
 elif dataset_name == 'cifar':
 	dataset = datasets.CIFAR10('../data', train=True, download=True, transform=transform)
 elif dataset_name == 'mnist':
@@ -76,7 +76,7 @@ def weights_init(m):
 		m.weight.data.normal_(1.0, 0.02)
 		m.bias.data.fill_(0)
 
-if dataset_name == 'portraits64':
+if dataset_name == 'paintings64':
 	class ACGenerator(nn.Module):
 	    def __init__(self, zdim=100, n_feature_maps=64):
 	        super(ACGenerator, self).__init__()
@@ -344,11 +344,11 @@ for epoch in tqdm(range(1,n_epochs+1)):
 	# generates samples with fixed noise
 	fake = G(fixed_z)
 	results['samples'].append(fake.data.cpu().numpy())
-	vutils.save_image(fake.data, '{}ACGAN_samples_epoch_{}.png'.format(SAVE_FOLDER, epoch), normalize=True, nrow=n_samples_per_class)
+	vutils.save_image(fake.data, '{}ACGAN_{}_samples_epoch_{}.png'.format(SAVE_FOLDER, n_feature_maps, epoch), normalize=True, nrow=n_samples_per_class)
 
 	# saves everything, overwriting previous epochs
-	torch.save(G.state_dict(), RESULTS_FOLDER + '{}_ACGAN_generator'.format(dataset_name))
-	torch.save(D.state_dict(), RESULTS_FOLDER + '{}_ACGAN_discriminator'.format(dataset_name))
+	torch.save(G.state_dict(), RESULTS_FOLDER + '{}_ACGAN_{}_generator'.format(dataset_name, n_feature_maps))
+	torch.save(D.state_dict(), RESULTS_FOLDER + '{}_ACGAN_{}_discriminator'.format(dataset_name, n_feature_maps))
 
-	with open(RESULTS_FOLDER + 'losses_and_samples_{}_ACGAN.p'.format(dataset_name), 'wb') as f:
+	with open(RESULTS_FOLDER + 'losses_and_samples_{}_ACGAN_{}.p'.format(dataset_name, n_feature_maps), 'wb') as f:
 		pickle.dump(results, f)
