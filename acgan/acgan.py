@@ -80,7 +80,7 @@ source_criterion = nn.BCELoss()
 
 if dataset_name == 'paintings64':
 	n_examples = len(dataset)
-	class_weights = [7198,4089,10983,11545,12926,5702] #not ideal hard-coded like this
+	class_weights = [7198,4089,10983,11545,12926,5702] # not ideal hard-coded like this
 	class_weights = torch.Tensor(class_weights)/n_examples
 	class_criterion = nn.CrossEntropyLoss(class_weights)
 

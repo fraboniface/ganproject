@@ -79,7 +79,7 @@ if dataset_name == 'paintings64':
 	        super(Generator, self).__init__()
 	        self.main = nn.Sequential(
 	        	#1x1
-	        	nn.ConvTranspose2d(zdim+n_classes, 8*n_feature_maps, 4, 1, 0, bias=False),
+	        	nn.ConvTranspose2d(zdim, 8*n_feature_maps, 4, 1, 0, bias=False),
 	            nn.BatchNorm2d(8*n_feature_maps),
 	            nn.ReLU(True),
 	            #4x4
@@ -109,7 +109,7 @@ if dataset_name == 'paintings64':
 	        super(Discriminator, self).__init__()
 	        self.main = nn.Sequential(
 	            #64x64
-	            nn.Conv2d(3, n_feature_maps, 4, 2, 1, bias=False),
+	            nn.Conv2d(n_channels, n_feature_maps, 4, 2, 1, bias=False),
 	            nn.LeakyReLU(0.2, inplace=True),
 	            #32x32
 	            nn.Conv2d(n_feature_maps, 2*n_feature_maps, 4, 2, 1, bias=False),
