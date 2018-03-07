@@ -222,7 +222,12 @@ for epoch in tqdm(range(1,n_epochs+1)):
 		z = Variable(z)
 		dis_c = Variable(dis_c)
 		con_c = Variable(con_c)
-		c = torch.cat([dis_c, con_c], 1)
+		if dis_c is None:
+			c = con_c
+		elif con_c is None:
+			c = dis_c
+		else:
+			c = torch.cat([dis_c, con_c], 1)
 
 		gen_data = G(z, c)
 		layer_fake, D_gen, Q_params = DQ(gen_data, mode='Q')
