@@ -128,7 +128,6 @@ cross_entropy_loss = nn.CrossEntropyLoss()
 
 def log_gaussian(mean, var, x):
 	"""Arguments are vectors"""
-	print(var)
 	log = -1/2 * torch.log(2*np.pi*var) - (x-mean)**2 / (2*var)
 	return log.sum(1).mean()
 
@@ -212,22 +211,17 @@ for epoch in tqdm(range(1,n_epochs+1)):
 		z = torch.FloatTensor(batch_size, z_size, 1, 1).normal_(0,1)
 		dis_c = code.sample_discrete(batch_size)
 		con_c = code.sample_continuous(batch_size)
+		c = torch.cat([dis_c, con_c], 1)
 		if gpu:
 			z = z.cuda()
-			if dis_c is not None:
-				dis_c = dis_c.cuda()
-			if con_c is not None:
-				con_c = con_c.cuda()
+			dis_c = dis_c.cuda()
+			con_c = con_c.cuda()
+			c = c.cuda()
 
 		z = Variable(z)
 		dis_c = Variable(dis_c)
 		con_c = Variable(con_c)
-		if dis_c is None:
-			c = con_c
-		elif con_c is None:
-			c = dis_c
-		else:
-			c = torch.cat([dis_c, con_c], 1)
+		c = Variable(c)
 
 		gen_data = G(z, c)
 		layer_fake, D_gen, Q_params = DQ(gen_data, mode='Q')

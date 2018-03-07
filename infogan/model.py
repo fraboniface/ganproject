@@ -182,11 +182,11 @@ class Code:
         self.entropy = self.dis_entropy + self.con_entropy
             
     def sample_discrete(self, batch_size):
-        c = None
+        c = torch.Tensor([])
         for k in self.discrete_list:
             tmp = np.random.multinomial(1, k*[1/k], size=batch_size)
             tmp = torch.from_numpy(tmp.astype(np.float32))
-            if c is None:
+            if len(c) == 0:
                 c = tmp
             else:
                 c = torch.cat([c,tmp],1)
@@ -201,6 +201,9 @@ class Code:
                 c = torch.FloatTensor(batch_size, self.con_dim).normal_(0,1)
             
             return c
+            
+        else:
+            return torch.Tensor([])
     
     def sample(self, batch_size):
         dis = self.sample_discrete(batch_size)
