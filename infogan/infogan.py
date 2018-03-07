@@ -70,7 +70,7 @@ if dataset_name == 'paintings64':
 	# take into account class imbalance by using a weighted sampler
 	class_counts = [4089,10983,11545,12926,5702]
 	weights = 1 / torch.Tensor(class_counts)
-	#weights = weights.double()
+	weights = weights.double()
 	sampler = torch.utils.data.sampler.WeightedRandomSampler(weights, batch_size)
 	dataset = datasets.ImageFolder('../paintings64/', transform=transform)
 	dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=False, num_workers=2, sampler=sampler)
@@ -103,7 +103,7 @@ else:
 	G = Generator32(effective_latent_size, n_feature_maps, n_channels)
 	DQ = D_and_Q_32(n_feature_maps, n_channels, code)
 
-G.apply(weights_init)
+G.apply(weights_init)	
 DQ.apply(weights_init)
 
 lr = 2e-4
@@ -128,6 +128,7 @@ cross_entropy_loss = nn.CrossEntropyLoss()
 
 def log_gaussian(mean, var, x):
 	"""Arguments are vectors"""
+	print(var)
 	log = -1/2 * torch.log(2*np.pi*var) - (x-mean)**2 / (2*var)
 	return log.sum(1).mean()
 
@@ -213,8 +214,10 @@ for epoch in tqdm(range(1,n_epochs+1)):
 		con_c = code.sample_continuous(batch_size)
 		if gpu:
 			z = z.cuda()
-			dis_c = dis_c.cuda()
-			con_c = con_c.cuda()
+			if dis_c is not None:
+				dis_c = dis_c.cuda()
+			if con_c is not None:
+				con_c = con_c.cuda()
 
 		z = Variable(z)
 		dis_c = Variable(dis_c)
