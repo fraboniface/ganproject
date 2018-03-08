@@ -12,8 +12,10 @@ import pickle
 import sys
 from tqdm import tqdm
 
-from model import *
+from models import *
+from utils import Code
 
+model_name = 'InfoGAN'
 
 dataset_name = sys.argv[1]
 assert dataset_name in ['paintings64', 'mnist', 'cifar']
@@ -24,13 +26,13 @@ RESULTS_FOLDER = '../results/saved_data/'
 batch_size = 100
 
 if dataset_name == 'paintings64':
-	n_classes = 5
+	n_classes = 5 # genres, but could be something else
 	img_size = 64
 	n_channels = 3
 	n_feature_maps = 128
 	n_epochs = 50
-	code = Code([], 10, 'uniform')
-	lambda_param = 0.5
+	code = Code(0, 10, 'uniform')
+	lambda_param = 1e-2
 
 elif dataset_name == 'cifar':
 	n_classes = 10
@@ -38,8 +40,8 @@ elif dataset_name == 'cifar':
 	n_channels = 3
 	n_feature_maps = 128
 	n_epochs = 50
-	code = Code([], 10, 'uniform')
-	lambda_param = 0.5
+	code = Code(10, 10, 'uniform')
+	lambda_param = 1e-2
 	
 elif dataset_name == 'mnist':
 	n_classes = 10
@@ -47,8 +49,8 @@ elif dataset_name == 'mnist':
 	n_channels = 1
 	n_feature_maps = 64
 	n_epochs = 20
-	code = Code([10], 5, 'uniform')
-	lambda_param = 0.5
+	code = Code(10, 5, 'uniform')
+	lambda_param = 0.1
 
 
 if dataset_name == 'mnist':
@@ -93,14 +95,13 @@ def weights_init(m):
 		m.bias.data.fill_(0)
 
 latent_size = 100
-z_size = latent_size - code.dimension
-effective_latent_size = z_size + code.latent_size
+z_size = latent_size - code.latent_size
 
 if dataset_name == 'paintings64':
-	G = Generator64(effective_latent_size, n_feature_maps, n_channels)
+	G = Generator64(latent_size, n_feature_maps, n_channels)
 	DQ = D_and_Q_64(n_feature_maps, n_channels, code)
 else:
-	G = Generator32(effective_latent_size, n_feature_maps, n_channels)
+	G = Generator32(latent_size, n_feature_maps, n_channels)
 	DQ = D_and_Q_32(n_feature_maps, n_channels, code)
 
 G.apply(weights_init)	
@@ -112,55 +113,56 @@ beta2 = 0.999
 G_optimiser = optim.Adam(G.parameters(), lr=lr, betas=(beta1, beta2))
 DQ_optimiser = optim.Adam(DQ.parameters(), lr=lr, betas=(beta1, beta2))
 
-fixed_z = torch.FloatTensor(batch_size, z_size, 1, 1).normal_(0,1)
-fixed_c = code.sample(batch_size)
-fixed_z = Variable(fixed_z, volatile=True)
-fixed_c = Variable(fixed_c, volatile=True)
+if dataset == 'mnist':
+	fixed_z = torch.FloatTensor(10, z_size, 1, 1).normal_(0,1)
+	fixed_z = fixed_z.repeat(5,1,1,1)
+	onehot = torch.eye(n_classes).view(n_classes,n_classes)
+	fixed_c = onehot.repeat(5,1)
 
-ones = 0.9*Variable(torch.ones(batch_size))
+else:
+	fixed_z = torch.FloatTensor(batch_size, z_size, 1, 1).normal_(0,1)
+	fixed_c = code.sample(batch_size)
+	fixed_z = Variable(fixed_z, volatile=True)
+	fixed_c = Variable(fixed_c, volatile=True)
+
+
+#ones = Variable(torch.ones(batch_size))
+ones = Variable(torch.FloatTensor(batch_size).uniform_(0.9,1)) # label smoothing
 zeros = Variable(torch.zeros(batch_size))
 
-
-
-D_criterion = nn.BCELoss()
-G_criterion = nn.MSELoss()
-cross_entropy_loss = nn.CrossEntropyLoss()
+source_criterion = nn.BCELoss()
+ce_loss = nn.CrossEntropyLoss()
 
 def log_gaussian(mean, var, x):
 	"""Arguments are vectors"""
 	log = -1/2 * torch.log(2*np.pi*var) - (x-mean)**2 / (2*var)
 	return log.sum(1).mean()
 
-def Q_con_criterion(Q_params, c):
+def compute_milb(Qc_x, c, code):
+	"""Computes the mutual information lower bound"""
 
-	if code.con_dim > 0:
-		mean, var = code.get_gaussian_params(Q_params)
-		return log_gaussian(mean, var, c)
+	milb = 0
+	#milb = code.entropy # for true lower bound
+	if code.n_classes > 0:
+		dis_c_onehot = code.get_logits(c)
+		_, dis_c_num = dis_c_onehot.max(1) # CrossEntropyLoss wants numerical targets, not onehot
+		Q_logits = code.get_logits(Qc_x)
+		milb -= ce_loss(Q_logits, dis_c_num) # note the minus
 
-	else:
-		return 0
+	if code.n_continuous > 0:
+		con_c = code.get_gaussian_values(c)
+		mean, var = code.get_gaussian_params(Qc_x)
+		milb += log_gaussian(mean, var, con_c)
 
-def Q_dis_criterion(Q_params, c):
-
-	Q_dis_error = 0
-	if code.dis_dim > 0:
-		Q_logits_list = code.get_logits(Q_params)
-		dis_c_list = code.get_logits(dis_c)
-		for logits, onehot_targets in zip(Q_logits_list, dis_c_list):
-			# apply cross-entropy loss to all different discrete random variables
-			_, targets = onehot_targets.max(1) # NLL wants numerical targets, not onehot
-			Q_dis_error += cross_entropy_loss(logits, targets)
-		
-	return Q_dis_error
+	return milb
 
 # to GPU
 gpu = torch.cuda.is_available()
 if gpu:
 	G.cuda()
 	DQ.cuda()
-	D_criterion.cuda()
-	G_criterion.cuda()
-	cross_entropy_loss.cuda()
+	source_criterion.cuda()
+	ce_loss.cuda()
 	ones = ones.cuda()
 	zeros = zeros.cuda()
 	fixed_z = fixed_z.cuda()
@@ -178,13 +180,12 @@ for epoch in tqdm(range(1,n_epochs+1)):
 		img = Variable(img)
 		#labels = Variable(labels)
 
-		# DISCRIMINATOR STEP
+		# DISCRIMINATOR and Q STEP
 		DQ.zero_grad()
 
 		#real data
-		layer_real, D_real = DQ(img)
-		D_real_error = D_criterion(D_real, ones)
-		D_real_error.backward()
+		D_real = DQ(img, mode='D')
+		D_real_error = source_criterion(D_real, ones)
 
 		#fake data
 		z = torch.FloatTensor(batch_size, z_size, 1, 1).normal_(0,1)
@@ -196,53 +197,44 @@ for epoch in tqdm(range(1,n_epochs+1)):
 		z = Variable(z)
 		c = Variable(c)
 		fake_data = G(z, c)
-		_, D_fake = DQ(fake_data.detach())
-		D_fake_error = D_criterion(D_fake, zeros)
+		D_fake, Qc_x = DQ(fake_data.detach(), mode='Q')
+		D_fake_error = source_criterion(D_fake, zeros)
 
-		D_fake_error.backward()
+		milb = compute_milb(Qc_x, c, code)
+		
+		DQ_loss = D_real_error + D_fake_error - lambda_param * milb
+		DQ_loss.backward(retain_graph=True)
 
 		DQ_optimiser.step()
 
 
 		# GENERATOR STEP
 		G.zero_grad()
-		DQ.zero_grad() # we're going to optimise it again
 
 		z = torch.FloatTensor(batch_size, z_size, 1, 1).normal_(0,1)
-		dis_c = code.sample_discrete(batch_size)
-		con_c = code.sample_continuous(batch_size)
-		c = torch.cat([dis_c, con_c], 1)
+		c = code.sample(batch_size)
 		if gpu:
 			z = z.cuda()
-			dis_c = dis_c.cuda()
-			con_c = con_c.cuda()
 			c = c.cuda()
 
 		z = Variable(z)
-		dis_c = Variable(dis_c)
-		con_c = Variable(con_c)
 		c = Variable(c)
 
 		gen_data = G(z, c)
-		layer_fake, D_gen, Q_params = DQ(gen_data, mode='Q')
-		G_error = G_criterion(layer_fake, layer_real.detach()) # feature matching
-		Q_dis_error = Q_dis_criterion(Q_params, dis_c)
-		Q_con_error = Q_con_criterion(Q_params, con_c)
+		D_gen, Qc_x = DQ(gen_data, mode='Q')
+		G_error = source_criterion(D_gen, ones)
 
-		lower_bound = Q_dis_error + Q_con_error + code.entropy
-		GQ_loss = - lambda_param * lower_bound
+		milb = compute_milb(Qc_x, c, code)
 
-		GQ_loss.backward(retain_graph=True)
-		G_error.backward()
+		G_loss = G_error - lambda_param * milb
+		G_loss.backward()
 
 		G_optimiser.step()
-		DQ_optimiser.step()
-
 
 	# generates samples with fixed noise
 	fake = G(fixed_z, fixed_c)
-	vutils.save_image(fake.data, '{}InfoGAN1_{}_samples_epoch_{}.png'.format(SAVE_FOLDER, n_feature_maps, epoch), normalize=True, nrow=10)
+	vutils.save_image(fake.data, '{}{}_{}_samples_epoch_{}.png'.format(SAVE_FOLDER, model_name, n_feature_maps, epoch), normalize=True, nrow=10)
 
 	# saves everything, overwriting previous epochs
-	torch.save(G.state_dict(), RESULTS_FOLDER + '{}InfoGAN1{}_generator'.format(dataset_name, n_feature_maps))
-	torch.save(DQ.state_dict(), RESULTS_FOLDER + '{}InfoGAN1{}_D_and_Q'.format(dataset_name, n_feature_maps))
+	torch.save(G.state_dict(), RESULTS_FOLDER + '{}_{}_{}_generator'.format(dataset_name, model_name, n_feature_maps))
+	torch.save(DQ.state_dict(), RESULTS_FOLDER + '{}_{}_{}_D_and_Q'.format(dataset_name, model_name, n_feature_maps))
