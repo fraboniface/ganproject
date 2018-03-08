@@ -12,7 +12,7 @@ import pickle
 import sys
 from tqdm import tqdm
 
-model_name = 'DCGAN_FM'
+model_name = 'DCGAN'
 
 dataset_name = sys.argv[1]
 assert dataset_name in ['paintings64', 'mnist', 'cifar']
@@ -126,18 +126,14 @@ if dataset_name == 'paintings64':
 	            nn.BatchNorm2d(8*n_feature_maps),
 	            nn.LeakyReLU(0.2, inplace=True),
 	            # 4x4
-	            )
-
-	        self.output_layer = nn.Sequential(
 	            nn.Conv2d(8*n_feature_maps, 1, 4, 1, 0, bias=False),
 	            #1x1
 	            nn.Sigmoid()
 	        )
 	        
 	    def  forward(self, x):
-	        x = self.main(x)
-	        output = self.output_layer(x)
-	        return x, output.view(-1, 1).squeeze(1)
+	        output = self.main(x)
+	        return output.view(-1, 1).squeeze(1)
 
 else:
 	class Generator(nn.Module):
@@ -184,18 +180,14 @@ else:
 	            nn.BatchNorm2d(4*n_feature_maps),
 	            nn.LeakyReLU(0.2, inplace=True),
 	            #4x4
-	            )
-
-	        self.output_layer = nn.Sequential(
 	            nn.Conv2d(4*n_feature_maps, 1, 4, 1, 0, bias=False),
 	            #1x1
 	            nn.Sigmoid()
 	        )
 	        
 	    def  forward(self, x):
-	        x = self.main(x)
-	        output = self.output_layer(x)
-	        return x, output.view(-1, 1).squeeze(1)
+	        output = self.main(x)
+	        return output.view(-1, 1).squeeze(1)
 
 
 z_size = 100
@@ -214,19 +206,18 @@ D_optimiser = optim.Adam(D.parameters(), lr=lr, betas=(beta1, beta2))
 fixed_z = torch.FloatTensor(batch_size, z_size, 1, 1).normal_(0,1)
 fixed_z = Variable(fixed_z, volatile=True)
 
-ones = 0.9*Variable(torch.ones(batch_size))
+#ones = Variable(torch.ones(batch_size))
+ones = Variable(torch.FloatTensor(batch_size).uniform_(0.9,1)) # label smoothing
 zeros = Variable(torch.zeros(batch_size))
 
-D_criterion = nn.BCELoss()
-G_criterion = nn.MSELoss()
+criterion = nn.BCELoss()
 
 # to GPU
 gpu = torch.cuda.is_available()
 if gpu:
 	G.cuda()
 	D.cuda()
-	D_criterion.cuda()
-	G_criterion.cuda()
+	criterion.cuda()
 	ones = ones.cuda()
 	zeros = zeros.cuda()
 	fixed_z = fixed_z.cuda()
@@ -254,8 +245,8 @@ for epoch in tqdm(range(1,n_epochs+1)):
 		D.zero_grad()
 
 		#real data
-		layer_real, D_real = D(img)
-		D_real_error = D_criterion(D_real, ones)
+		D_real = D(img)
+		D_real_error = criterion(D_real, ones)
 		results['D_real_loss'].append(D_real_error)
 		D_real_error.backward()
 
@@ -266,8 +257,8 @@ for epoch in tqdm(range(1,n_epochs+1)):
 
 		z = Variable(z)
 		fake_data = G(z)
-		_, D_fake = D(fake_data.detach())
-		D_fake_error = D_criterion(D_fake, zeros)
+		D_fake = D(fake_data.detach())
+		D_fake_error = criterion(D_fake, zeros)
 		results['D_fake_loss'].append(D_fake_error.data.cpu().numpy())
 		D_fake_error.backward()
 
@@ -284,9 +275,8 @@ for epoch in tqdm(range(1,n_epochs+1)):
 
 		z = Variable(z)
 		gen_data = G(z)
-		layer_fake, _ = D(gen_data)
-		#G_error = criterion(D_gen, ones)
-		G_error = G_criterion(layer_fake, layer_real.detach())
+		D_gen = D(gen_data)
+		G_error = criterion(D_gen, ones)
 		results['G_loss'].append(G_error.data.cpu().numpy())
 		G_error.backward()
 
@@ -295,7 +285,7 @@ for epoch in tqdm(range(1,n_epochs+1)):
 
 	# generates samples with fixed noise
 	fake = G(fixed_z)
-	vutils.save_image(fake.data, '{}{}{}_samples_epoch_{}.png'.format(SAVE_FOLDER, model_name, n_feature_maps, epoch), normalize=True, nrow=10)
+	vutils.save_image(fake.data, '{}{}_{}_samples_epoch_{}.png'.format(SAVE_FOLDER, model_name, n_feature_maps, epoch), normalize=True, nrow=10)
 
 	# saves everything, overwriting previous epochs
 	torch.save(G.state_dict(), RESULTS_FOLDER + '{}_{}_{}_generator'.format(dataset_name, model_name, n_feature_maps))
