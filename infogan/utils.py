@@ -32,16 +32,16 @@ class Code:
     def sample_discrete(self, batch_size):
         if self.n_classes > 0:
             c = np.random.multinomial(1, self.n_classes*[1/self.n_classes], size=batch_size)
-            return torch.from_numpy(tmp.astype(np.float32))
+            return torch.from_numpy(c.astype(np.float32))
         else:
             return torch.Tensor([])
     
     def sample_continuous(self, batch_size):
         if self.n_continuous > 0:
             if self.type_continuous == 'uniform':
-                c = torch.FloatTensor(batch_size, self.con_dim).uniform_(-1,1)
+                c = torch.FloatTensor(batch_size, self.n_continuous).uniform_(-1,1)
             else:
-                c = torch.FloatTensor(batch_size, self.con_dim).normal_(0,1)
+                c = torch.FloatTensor(batch_size, self.n_continuous).normal_(0,1)
             
             return c
             
@@ -62,5 +62,5 @@ class Code:
     def get_gaussian_params(self, Qc_x):
         mean_end_idx = self.n_classes + self.n_continuous
         mean  = Qc_x[:, self.n_classes:mean_end_idx]
-        log_var = params[:,mean_end_idx:]
+        log_var = Qc_x[:,mean_end_idx:]
         return mean, torch.exp(log_var)

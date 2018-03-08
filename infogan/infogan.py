@@ -26,7 +26,7 @@ RESULTS_FOLDER = '../results/saved_data/'
 batch_size = 100
 
 if dataset_name == 'paintings64':
-	n_classes = 5
+	n_classes = 5 # genres, but could be something else
 	img_size = 64
 	n_channels = 3
 	n_feature_maps = 128
@@ -95,14 +95,13 @@ def weights_init(m):
 		m.bias.data.fill_(0)
 
 latent_size = 100
-z_size = latent_size - code.dimension
-effective_latent_size = z_size + code.latent_size
+z_size = latent_size - code.latent_size
 
 if dataset_name == 'paintings64':
-	G = Generator64(effective_latent_size, n_feature_maps, n_channels)
+	G = Generator64(latent_size, n_feature_maps, n_channels)
 	DQ = D_and_Q_64(n_feature_maps, n_channels, code)
 else:
-	G = Generator32(effective_latent_size, n_feature_maps, n_channels)
+	G = Generator32(latent_size, n_feature_maps, n_channels)
 	DQ = D_and_Q_32(n_feature_maps, n_channels, code)
 
 G.apply(weights_init)	
@@ -114,10 +113,18 @@ beta2 = 0.999
 G_optimiser = optim.Adam(G.parameters(), lr=lr, betas=(beta1, beta2))
 DQ_optimiser = optim.Adam(DQ.parameters(), lr=lr, betas=(beta1, beta2))
 
-fixed_z = torch.FloatTensor(batch_size, z_size, 1, 1).normal_(0,1)
-fixed_c = code.sample(batch_size)
-fixed_z = Variable(fixed_z, volatile=True)
-fixed_c = Variable(fixed_c, volatile=True)
+if dataset == 'mnist':
+	fixed_z = torch.FloatTensor(10, z_size, 1, 1).normal_(0,1)
+	fixed_z = fixed_z.repeat(5,1,1,1)
+	onehot = torch.eye(n_classes).view(n_classes,n_classes)
+	fixed_c = onehot.repeat(5,1)
+
+else:
+	fixed_z = torch.FloatTensor(batch_size, z_size, 1, 1).normal_(0,1)
+	fixed_c = code.sample(batch_size)
+	fixed_z = Variable(fixed_z, volatile=True)
+	fixed_c = Variable(fixed_c, volatile=True)
+
 
 #ones = Variable(torch.ones(batch_size))
 ones = Variable(torch.FloatTensor(batch_size).uniform_(0.9,1)) # label smoothing
@@ -136,11 +143,11 @@ def compute_milb(Qc_x, c, code):
 
 	milb = 0
 	#milb = code.entropy # for true lower bound
-	if code.n_classes > :
+	if code.n_classes > 0:
 		dis_c_onehot = code.get_logits(c)
 		_, dis_c_num = dis_c_onehot.max(1) # CrossEntropyLoss wants numerical targets, not onehot
 		Q_logits = code.get_logits(Qc_x)
-		milb -= ce_loss(Q_logits, dis_c) # note the minus
+		milb -= ce_loss(Q_logits, dis_c_num) # note the minus
 
 	if code.n_continuous > 0:
 		con_c = code.get_gaussian_values(c)
