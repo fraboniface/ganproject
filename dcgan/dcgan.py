@@ -124,16 +124,22 @@ if dataset_name == 'paintings64':
 	            #8x8
 	            nn.Conv2d(4*n_feature_maps, 8*n_feature_maps, 4, 2, 1, bias=False),
 	            nn.BatchNorm2d(8*n_feature_maps),
-	            nn.LeakyReLU(0.2, inplace=True),
+	            nn.LeakyReLU(0.2, inplace=True)
+	            )
+	        self.output = nn.Sequential(
 	            # 4x4
 	            nn.Conv2d(8*n_feature_maps, 1, 4, 1, 0, bias=False),
 	            #1x1
 	            nn.Sigmoid()
 	        )
 	        
-	    def  forward(self, x):
-	        output = self.main(x)
-	        return output.view(-1, 1).squeeze(1)
+	    def  forward(self, x, matching=False):
+	        x = self.main(x)
+	        if matching	:
+	        	return x
+	        else:
+	        	output = self.output(x)
+	        	return output.view(-1, 1).squeeze(1)
 
 else:
 	class Generator(nn.Module):
@@ -180,14 +186,21 @@ else:
 	            nn.BatchNorm2d(4*n_feature_maps),
 	            nn.LeakyReLU(0.2, inplace=True),
 	            #4x4
+	            )
+	        self.output = nn.Sequential(
+	            # 4x4
 	            nn.Conv2d(4*n_feature_maps, 1, 4, 1, 0, bias=False),
 	            #1x1
 	            nn.Sigmoid()
 	        )
 	        
-	    def  forward(self, x):
-	        output = self.main(x)
-	        return output.view(-1, 1).squeeze(1)
+	    def  forward(self, x, matching=False):
+	        x = self.main(x)
+	        if matching:
+	        	return x
+	        else:
+	        	output = self.output(x)
+	        	return output.view(-1, 1).squeeze(1)
 
 
 z_size = 100
@@ -210,14 +223,16 @@ fixed_z = Variable(fixed_z, volatile=True)
 ones = Variable(torch.FloatTensor(batch_size).uniform_(0.9,1)) # label smoothing
 zeros = Variable(torch.zeros(batch_size))
 
-criterion = nn.BCELoss()
+D_criterion = nn.BCELoss()
+G_criterion = nn.MSELoss()
 
 # to GPU
 gpu = torch.cuda.is_available()
 if gpu:
 	G.cuda()
 	D.cuda()
-	criterion.cuda()
+	D_criterion.cuda()
+	G_criterion.cuda()
 	ones = ones.cuda()
 	zeros = zeros.cuda()
 	fixed_z = fixed_z.cuda()
@@ -246,7 +261,7 @@ for epoch in tqdm(range(1,n_epochs+1)):
 
 		#real data
 		D_real = D(img)
-		D_real_error = criterion(D_real, ones)
+		D_real_error = D_criterion(D_real, ones)
 		results['D_real_loss'].append(D_real_error)
 		D_real_error.backward()
 
@@ -258,7 +273,7 @@ for epoch in tqdm(range(1,n_epochs+1)):
 		z = Variable(z)
 		fake_data = G(z)
 		D_fake = D(fake_data.detach())
-		D_fake_error = criterion(D_fake, zeros)
+		D_fake_error = D_criterion(D_fake, zeros)
 		results['D_fake_loss'].append(D_fake_error.data.cpu().numpy())
 		D_fake_error.backward()
 
@@ -275,8 +290,13 @@ for epoch in tqdm(range(1,n_epochs+1)):
 
 		z = Variable(z)
 		gen_data = G(z)
-		D_gen = D(gen_data)
-		G_error = criterion(D_gen, ones)
+
+		real_features = D(img, matching=True)
+		fake_features = D(gen_data, matching=True)
+		real_mean = torch.mean(real_features, 0)
+		fake_mean = torch.mean(fake_features, 0)
+		G_error = G_criterion(fake_mean, real_mean.detach())
+
 		results['G_loss'].append(G_error.data.cpu().numpy())
 		G_error.backward()
 
