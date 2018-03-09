@@ -32,7 +32,6 @@ if dataset_name == 'paintings64':
 	n_feature_maps = 128
 	n_epochs = 50
 	code = Code(0, 10, 'uniform')
-	lambda_param = 1e-2
 
 elif dataset_name == 'cifar':
 	n_classes = 10
@@ -40,8 +39,7 @@ elif dataset_name == 'cifar':
 	n_channels = 3
 	n_feature_maps = 128
 	n_epochs = 50
-	code = Code(10, 10, 'uniform')
-	lambda_param = 1e-2
+	code = Code(10, 5, 'uniform')
 	
 elif dataset_name == 'mnist':
 	n_classes = 10
@@ -49,8 +47,10 @@ elif dataset_name == 'mnist':
 	n_channels = 1
 	n_feature_maps = 64
 	n_epochs = 20
-	code = Code(10, 5, 'uniform')
-	lambda_param = 0.1
+	code = Code(10, 2, 'uniform')
+
+lambda_dis = 1
+lambda_con = 0.1
 
 
 if dataset_name == 'mnist':
@@ -71,10 +71,13 @@ else:
 if dataset_name == 'paintings64':
 	# take into account class imbalance by using a weighted sampler
 	class_counts = [4089,10983,11545,12926,5702]
-	weights = 1 / torch.Tensor(class_counts)
+	probs = []
+	for i in class_counts:
+	    probs += [i]*i
+	weights = 1 / torch.Tensor(probs)
 	weights = weights.double()
-	sampler = torch.utils.data.sampler.WeightedRandomSampler(weights, batch_size)
 	dataset = datasets.ImageFolder('../paintings64/', transform=transform)
+	sampler = torch.utils.data.sampler.WeightedRandomSampler(weights, len(dataset))
 	dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=False, num_workers=2, sampler=sampler)
 
 else:
@@ -113,8 +116,8 @@ beta2 = 0.999
 G_optimiser = optim.Adam(G.parameters(), lr=lr, betas=(beta1, beta2))
 DQ_optimiser = optim.Adam(DQ.parameters(), lr=lr, betas=(beta1, beta2))
 
-if dataset == 'mnist':
-	fixed_z = torch.FloatTensor(10, z_size, 1, 1).normal_(0,1)
+if dataset_name == 'mnist':
+	fixed_z = torch.FloatTensor(10, latent_size - n_classes, 1, 1).normal_(0,1)
 	fixed_z = fixed_z.repeat(5,1,1,1)
 	onehot = torch.eye(n_classes).view(n_classes,n_classes)
 	fixed_c = onehot.repeat(5,1)
@@ -130,7 +133,8 @@ else:
 ones = Variable(torch.FloatTensor(batch_size).uniform_(0.9,1)) # label smoothing
 zeros = Variable(torch.zeros(batch_size))
 
-source_criterion = nn.BCELoss()
+D_criterion = nn.BCELoss()
+G_criterion = nn.MSELoss()
 ce_loss = nn.CrossEntropyLoss()
 
 def log_gaussian(mean, var, x):
@@ -138,38 +142,53 @@ def log_gaussian(mean, var, x):
 	log = -1/2 * torch.log(2*np.pi*var) - (x-mean)**2 / (2*var)
 	return log.sum(1).mean()
 
-def compute_milb(Qc_x, c, code):
+def compute_milb(Qc_x, c, code, lambda_dis, lambda_con):
 	"""Computes the mutual information lower bound"""
 
-	milb = 0
+	milb_dis = 0
+	milb_con = 0
 	#milb = code.entropy # for true lower bound
 	if code.n_classes > 0:
 		dis_c_onehot = code.get_logits(c)
 		_, dis_c_num = dis_c_onehot.max(1) # CrossEntropyLoss wants numerical targets, not onehot
 		Q_logits = code.get_logits(Qc_x)
-		milb -= ce_loss(Q_logits, dis_c_num) # note the minus
+		milb_dis = - ce_loss(Q_logits, dis_c_num) # note the minus
 
 	if code.n_continuous > 0:
 		con_c = code.get_gaussian_values(c)
 		mean, var = code.get_gaussian_params(Qc_x)
-		milb += log_gaussian(mean, var, con_c)
+		milb_con = log_gaussian(mean, var, con_c)
 
-	return milb
+	milb = milb_dis + milb_con + code.entropy
+	Q_obj = lambda_dis*milb_dis + lambda_con*milb_con
+
+	return milb, Q_obj
 
 # to GPU
 gpu = torch.cuda.is_available()
 if gpu:
 	G.cuda()
 	DQ.cuda()
-	source_criterion.cuda()
+	D_criterion.cuda()
+	G_criterion.cuda()
 	ce_loss.cuda()
 	ones = ones.cuda()
 	zeros = zeros.cuda()
 	fixed_z = fixed_z.cuda()
 	fixed_c = fixed_c.cuda()
 
+train_hist = {}
+train_hist['DQ_loss'] = []
+train_hist['G_loss'] = []
+train_hist['milb'] = []
+
 
 for epoch in tqdm(range(1,n_epochs+1)):
+
+	D_losses = []
+	G_losses = []
+	milbs = []
+
 	for img, labels in dataloader:
 		if img.size(0) < batch_size:
 			continue
@@ -184,8 +203,8 @@ for epoch in tqdm(range(1,n_epochs+1)):
 		DQ.zero_grad()
 
 		#real data
-		D_real = DQ(img, mode='D')
-		D_real_error = source_criterion(D_real, ones)
+		D_real, features_real = DQ(img, mode='D')
+		D_real_error = D_criterion(D_real, ones)
 
 		#fake data
 		z = torch.FloatTensor(batch_size, z_size, 1, 1).normal_(0,1)
@@ -197,14 +216,15 @@ for epoch in tqdm(range(1,n_epochs+1)):
 		z = Variable(z)
 		c = Variable(c)
 		fake_data = G(z, c)
-		D_fake, Qc_x = DQ(fake_data.detach(), mode='Q')
-		D_fake_error = source_criterion(D_fake, zeros)
+		D_fake, Qc_x, _ = DQ(fake_data.detach(), mode='Q')
+		D_fake_error = D_criterion(D_fake, zeros)
 
-		milb = compute_milb(Qc_x, c, code)
+		milb, Q_obj = compute_milb(Qc_x, c, code, lambda_dis, lambda_con)
 		
-		DQ_loss = D_real_error + D_fake_error - lambda_param * milb
-		DQ_loss.backward(retain_graph=True)
+		D_error = D_real_error + D_fake_error
+		DQ_loss = D_error - Q_obj
 
+		DQ_loss.backward(retain_graph=True)
 		DQ_optimiser.step()
 
 
@@ -221,19 +241,34 @@ for epoch in tqdm(range(1,n_epochs+1)):
 		c = Variable(c)
 
 		gen_data = G(z, c)
-		D_gen, Qc_x = DQ(gen_data, mode='Q')
-		G_error = source_criterion(D_gen, ones)
+		D_gen, Qc_x, features_fake = DQ(gen_data, mode='Q')
 
-		milb = compute_milb(Qc_x, c, code)
+		mean_real = torch.mean(features_real,0)
+		mean_fake = torch.mean(features_fake, 0)
 
-		G_loss = G_error - lambda_param * milb
+		G_error = G_criterion(mean_fake, mean_real.detach())
+
+		milb, Q_obj = compute_milb(Qc_x, c, code, lambda_dis, lambda_con)
+
+		G_loss = G_error - Q_obj
+
 		G_loss.backward()
-
 		G_optimiser.step()
+
+		D_losses.append(D_error.data[0])
+		G_losses.append(G_error.data[0])
+		milbs.append(milb.data[0])
 
 	# generates samples with fixed noise
 	fake = G(fixed_z, fixed_c)
 	vutils.save_image(fake.data, '{}{}_{}_samples_epoch_{}.png'.format(SAVE_FOLDER, model_name, n_feature_maps, epoch), normalize=True, nrow=10)
+
+	train_hist['D_loss'].append(torch.mean(torch.FloatTensor(D_losses)))
+	train_hist['G_loss'].append(torch.mean(torch.FloatTensor(G_losses)))
+	train_hist['milb'].append(torch.mean(torch.FloatTensor(milbs)))
+
+	with open(RESULTS_FOLDER + 'losses_{}_{}_{}.p'.format(dataset_name, model_name, n_feature_maps), 'wb') as f:
+		pickle.dump(train_hist, f)
 
 	# saves everything, overwriting previous epochs
 	torch.save(G.state_dict(), RESULTS_FOLDER + '{}_{}_{}_generator'.format(dataset_name, model_name, n_feature_maps))

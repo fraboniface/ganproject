@@ -64,10 +64,10 @@ class D_and_Q_32(nn.Module):
 
         if mode == 'Q':
             Qc_x = self.Q(x).view(-1, self.code.param_size)
-            return source, Qc_x
+            return source, Qc_x, x
         else:
             # training on real images
-            return source
+            return source, x
 
 
 class Generator64(nn.Module):
@@ -138,7 +138,7 @@ class D_and_Q_64(nn.Module):
 
         if mode == 'Q':
             Qc_x = self.Q(x).view(-1, self.code.param_size)
-            return source, Qc_x
+            return source, Qc_x, x
         else:
             # training on real images
-            return source
+            return source, x

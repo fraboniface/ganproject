@@ -12,7 +12,7 @@ import pickle
 import sys
 from tqdm import tqdm
 
-model_name = 'DCGAN'
+model_name = 'DCGAN_fm'
 
 dataset_name = sys.argv[1]
 assert dataset_name in ['paintings64', 'mnist', 'cifar']
