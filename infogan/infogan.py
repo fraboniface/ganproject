@@ -116,7 +116,7 @@ beta2 = 0.999
 G_optimiser = optim.Adam(G.parameters(), lr=lr, betas=(beta1, beta2))
 DQ_optimiser = optim.Adam(DQ.parameters(), lr=lr, betas=(beta1, beta2))
 
-if dataset_name == 'mnist':
+"""if dataset_name == 'mnist':
 	fixed_z = torch.FloatTensor(10, latent_size - n_classes, 1, 1).normal_(0,1)
 	fixed_z = fixed_z.repeat(5,1,1,1)
 	onehot = torch.eye(n_classes).view(n_classes,n_classes)
@@ -126,7 +126,12 @@ else:
 	fixed_z = torch.FloatTensor(batch_size, z_size, 1, 1).normal_(0,1)
 	fixed_c = code.sample(batch_size)
 	fixed_z = Variable(fixed_z, volatile=True)
-	fixed_c = Variable(fixed_c, volatile=True)
+	fixed_c = Variable(fixed_c, volatile=True)"""
+
+fixed_z = torch.FloatTensor(batch_size, z_size, 1, 1).normal_(0,1)
+fixed_c = code.sample(batch_size)
+fixed_z = Variable(fixed_z, volatile=True)
+fixed_c = Variable(fixed_c, volatile=True)
 
 
 #ones = Variable(torch.ones(batch_size))
