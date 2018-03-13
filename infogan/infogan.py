@@ -15,7 +15,7 @@ from tqdm import tqdm
 from models import *
 from utils import Code
 
-model_name = 'InfoGAN'
+model_name = 'InfoGAN2'
 
 dataset_name = sys.argv[1]
 assert dataset_name in ['paintings64', 'mnist', 'cifar']
