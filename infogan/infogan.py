@@ -31,7 +31,7 @@ if dataset_name == 'paintings64':
 	n_channels = 3
 	n_feature_maps = 128
 	n_epochs = 50
-	code = Code(0, 10, 'uniform')
+	code = Code(0, 4, 'uniform')
 
 elif dataset_name == 'cifar':
 	n_classes = 10
@@ -47,7 +47,7 @@ elif dataset_name == 'mnist':
 	n_channels = 1
 	n_feature_maps = 64
 	n_epochs = 20
-	code = Code(10, 2, 'uniform')
+	code = Code(0, 3, 'uniform')
 
 lambda_dis = 1
 lambda_con = 0.1
@@ -178,7 +178,7 @@ if gpu:
 	fixed_c = fixed_c.cuda()
 
 train_hist = {}
-train_hist['DQ_loss'] = []
+train_hist['D_loss'] = []
 train_hist['G_loss'] = []
 train_hist['milb'] = []
 
