@@ -45,6 +45,9 @@ def get_gradient_penalty(real, fake, D, gamma=1, gpu=True):
     batch_size = real.size(0)
     alpha = torch.rand(batch_size,1,1,1)
     alpha = Variable(alpha.expand_as(real))
+    if gpu:
+        alpha = alpha.cuda()
+
     interpolation = alpha * real + (1-alpha) * fake # everything is a Variable so interpolation should be one too
     D_itp = D(interpolation)
     if gpu:
@@ -74,8 +77,8 @@ examples_seen = 0
 current_size = 4
 for epoch in tqdm(range(n_epochs)):
     for img, label in dataloader:
-    	if gpu:
-        	x = x.cuda()
+        if gpu:
+            img = img.cuda()
 
         x = Variable(img)
         if x.size(-1) > current_size:
