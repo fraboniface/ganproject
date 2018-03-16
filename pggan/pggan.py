@@ -5,6 +5,7 @@ import torch.optim as optim
 from torch.autograd import Variable, grad
 import torch.nn.functional as F
 from torchvision  import transforms, datasets
+import torchvision.utils as vutils
 from tqdm import tqdm
 from models import *
 
@@ -93,7 +94,7 @@ for epoch in tqdm(range(1,n_epochs+1)):
         D.zero_grad
         D_real = D(x)
         
-        z = torch.FloatTensor(batch_size, zdim, 1, 1).normal_()
+        z = torch.FloatTensor(x.size(0), zdim, 1, 1).normal_()
         if gpu:
             z = z.cuda()
 
@@ -133,3 +134,7 @@ for epoch in tqdm(range(1,n_epochs+1)):
     # generates samples with fixed noise
     fake = G(fixed_z)
     vutils.save_image(fake.data, '{}{}__samples_epoch_{}.png'.format(SAVE_FOLDER, model_name, epoch), normalize=True, nrow=10)
+
+    # saves everything, overwriting previous epochs
+	torch.save(G.state_dict(), RESULTS_FOLDER + '{}_{}_{}_generator'.format(dataset_name, model_name))
+	torch.save(D.state_dict(), RESULTS_FOLDER + '{}_{}_{}_discriminator'.format(dataset_name, model_name))
