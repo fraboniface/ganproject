@@ -24,10 +24,10 @@ gamma = 750
 epsilon_drift = 1e-3
 
 transform = transforms.Compose(
-	[
-	    transforms.ToTensor(),
-	    transforms.Normalize((0.5,0.5,0.5), (0.5,0.5,0.5))
-	])
+    [
+        transforms.ToTensor(),
+        transforms.Normalize((0.5,0.5,0.5), (0.5,0.5,0.5))
+    ])
 dataset = datasets.ImageFolder('../paintings64/', transform=transform)
 dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=2)
 
@@ -51,7 +51,7 @@ def get_gradient_penalty(real, fake, D, gamma=1, gpu=True):
     interpolation = alpha * real + (1-alpha) * fake # everything is a Variable so interpolation should be one too
     D_itp = D(interpolation)
     if gpu:
-    	gradients = grad(outputs=D_itp, inputs=interpolation, grad_outputs=torch.ones(D_itp.size()).cuda(), create_graph=True, retain_graph=True, only_inputs=True)[0]
+        gradients = grad(outputs=D_itp, inputs=interpolation, grad_outputs=torch.ones(D_itp.size()).cuda(), create_graph=True, retain_graph=True, only_inputs=True)[0]
     else:
         gradients = grad(outputs=D_itp, inputs=interpolation, grad_outputs=torch.ones(D_itp.size()), create_graph=True, retain_graph=True, only_inputs=True)[0]
 
@@ -63,9 +63,9 @@ fixed_z = Variable(fixed_z, volatile=True)
 
 gpu = torch.cuda.is_available()
 if gpu:
-	G.cuda()
-	D.cuda()	
-	fixed_z = fixed_z.cuda()
+    G.cuda()
+    D.cuda()
+    fixed_z = fixed_z.cuda()
 
 lr = 1e-3
 beta1 = 0
@@ -75,8 +75,9 @@ D_optimiser = optim.Adam(D.parameters(), lr=lr, betas=(beta1, beta2))
 
 examples_seen = 0
 current_size = 4
-for epoch in tqdm(range(n_epochs)):
+for epoch in tqdm(range(1,n_epochs+1)):
     for img, label in dataloader:
+        print('something')
         if gpu:
             img = img.cuda()
 
@@ -94,7 +95,7 @@ for epoch in tqdm(range(n_epochs)):
         
         z = torch.FloatTensor(batch_size, zdim, 1, 1).normal_()
         if gpu:
-        	z = z.cuda()
+            z = z.cuda()
 
         z = Variable(z)
         fake = G(z)
@@ -111,8 +112,8 @@ for epoch in tqdm(range(n_epochs)):
             
         z = torch.FloatTensor(batch_size, zdim, 1, 1).normal_()
         if gpu:
-        	z = z.cuda()
-        	
+            z = z.cuda()
+        
         z = Variable(z)
         fake = G(z)
         G_err = torch.mean(D(fake))

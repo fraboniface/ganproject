@@ -2,6 +2,17 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+
+class MinibatchSDLayer(nn.Module):
+    def __init__(self):
+        super(MinibatchSDLayer, self).__init__()
+        
+    def forward(self, x):
+        mean_batch_std = x.std(0).mean()
+        mean_batch_std = mean_batch_std.expand(x.size(0), 1, x.size(-1), x.size(-1))
+        return torch.cat([x, mean_batch_std], 1)
+        
+
 class GrowingGenerator(nn.Module):
     def __init__(self, zdim=100, init_size=4, final_size=128, n_feature_maps=128):
         super(GrowingGenerator, self).__init__()
@@ -70,8 +81,9 @@ class GrowingDiscriminator(nn.Module):
         )
         
         self.layers = [
+            MinibatchSDLayer(),
             #4x4
-            nn.Conv2d(init_nfm, init_nfm, 3, 1, 1, bias=False),
+            nn.Conv2d(init_nfm+1, init_nfm, 3, 1, 1, bias=False),
             nn.LeakyReLU(0.2, inplace=True),
             #4x4
             #nn.Conv2d(init_nfm, init_nfm, 4, 1, 0, bias=False),
@@ -98,7 +110,7 @@ class GrowingDiscriminator(nn.Module):
     def grow(self):
         if self.current_size == self.final_size:
             print("Network can't grow more")
-            return
+            return  
         
         if self.current_size in [8,32]:
             future_nfm = self.current_nfm
