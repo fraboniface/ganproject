@@ -12,6 +12,7 @@ from models import *
 model_name = 'PG_GAN'
 dataset_name = 'paintings64'
 SAVE_FOLDER = '../results/samples/{}/'.format(dataset_name)
+RESULTS_FOLDER = '../results/saved_data/'
 
 batch_size = 64
 zdim = 100
@@ -136,5 +137,5 @@ for epoch in tqdm(range(1,n_epochs+1)):
     vutils.save_image(fake.data, '{}{}__samples_epoch_{}.png'.format(SAVE_FOLDER, model_name, epoch), normalize=True, nrow=10)
 
     # saves everything, overwriting previous epochs
-	torch.save(G.state_dict(), RESULTS_FOLDER + '{}_{}_{}_generator'.format(dataset_name, model_name))
-	torch.save(D.state_dict(), RESULTS_FOLDER + '{}_{}_{}_discriminator'.format(dataset_name, model_name))
+    torch.save(G.state_dict(), RESULTS_FOLDER + '{}_{}_{}_generator'.format(dataset_name, model_name))
+    torch.save(D.state_dict(), RESULTS_FOLDER + '{}_{}_{}_discriminator'.format(dataset_name, model_name))
