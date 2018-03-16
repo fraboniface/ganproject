@@ -76,13 +76,13 @@ G_optimiser = optim.Adam(G.parameters(), lr=lr, betas=(beta1, beta2))
 D_optimiser = optim.Adam(D.parameters(), lr=lr, betas=(beta1, beta2))
 
 train_hist = {
-	'D_loss': [],
-	'G_loss': []
+    'D_loss': [],
+    'G_loss': []
 }
 
 for epoch in tqdm(range(1,n_epochs+1)):
-	D_losses = []
-	G_losses = []
+    D_losses = []
+    G_losses = []
     for img, label in dataloader:
         if gpu:
             img = img.cuda()
@@ -136,4 +136,4 @@ for epoch in tqdm(range(1,n_epochs+1)):
     train_hist['D_loss'].append(np.array(D_losses).mean())
     train_hist['G_loss'].append(np.array(G_losses).mean())
     with open(RESULTS_FOLDER + 'losses_{}_{}.p'.format(dataset_name, model_name), 'wb') as f:
-		pickle.dump(train_hist, f)
+        pickle.dump(train_hist, f)
