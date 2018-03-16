@@ -24,6 +24,7 @@ n_epochs = 50
 lambda_ = 10
 gamma = 750
 epsilon_drift = 1e-3
+n_samples_seen = 5e5
 
 transform = transforms.Compose(
     [
@@ -124,7 +125,7 @@ for epoch in tqdm(range(1,n_epochs+1)):
         examples_seen += img.size(0)
     
     # we grow every 100K images. 600Kin the paper, plus transitions, we'll see
-    if examples_seen % 1e5 == 0:
+    if examples_seen % n_samples_seen == 0:
         examples_seen = 0
         current_size *= 2
         G.grow()
@@ -137,5 +138,5 @@ for epoch in tqdm(range(1,n_epochs+1)):
     vutils.save_image(fake.data, '{}{}__samples_epoch_{}.png'.format(SAVE_FOLDER, model_name, epoch), normalize=True, nrow=10)
 
     # saves everything, overwriting previous epochs
-    torch.save(G.state_dict(), RESULTS_FOLDER + '{}_{}_{}_generator'.format(dataset_name, model_name))
-    torch.save(D.state_dict(), RESULTS_FOLDER + '{}_{}_{}_discriminator'.format(dataset_name, model_name))
+    torch.save(G.state_dict(), RESULTS_FOLDER + '{}_{}_generator'.format(dataset_name, model_name))
+    torch.save(D.state_dict(), RESULTS_FOLDER + '{}_{}_discriminator'.format(dataset_name, model_name))
