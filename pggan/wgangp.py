@@ -9,7 +9,7 @@ import torchvision.utils as vutils
 from tqdm import tqdm
 from models import *
 
-model_name = 'PG_GAN'
+model_name = 'WGAN-GP'
 dataset_name = 'paintings64'
 SAVE_FOLDER = '../results/samples/{}/'.format(dataset_name)
 RESULTS_FOLDER = '../results/saved_data/'
@@ -17,14 +17,10 @@ RESULTS_FOLDER = '../results/saved_data/'
 batch_size = 64
 zdim = 100
 n_feature_maps = 128
-init_size = 4
-final_size = 64
 n_epochs = 50
 
 lambda_ = 10
-gamma = 750
-epsilon_drift = 1e-3
-n_samples_seen = 5e5
+gamma = 1
 
 transform = transforms.Compose(
     [
@@ -37,11 +33,14 @@ dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle
 def weights_init(m):
     classname = m.__class__.__name__
     if classname.find('Conv') != -1:
-        nn.init.kaiming_normal(m.weight.data)
+        m.weight.data.normal_(0.0, 0.02)
+    elif classname.find('BatchNorm') != -1:
+        m.weight.data.normal_(1.0, 0.02)
+        m.bias.data.fill_(0)
         
-G = GrowingGenerator(zdim, init_size, final_size, n_feature_maps)
+G = Generator(zdim, n_feature_maps)
 G.apply(weights_init)
-D = GrowingDiscriminator(init_size, final_size, n_feature_maps)
+D = Discriminator(n_feature_maps)
 D.apply(weights_init)
 
 def get_gradient_penalty(real, fake, D, gamma=1, gpu=True):
@@ -72,7 +71,7 @@ if gpu:
 
 lr = 1e-3
 beta1 = 0
-beta2 = 0.99
+beta2 = 0.9
 G_optimiser = optim.Adam(G.parameters(), lr=lr, betas=(beta1, beta2))
 D_optimiser = optim.Adam(D.parameters(), lr=lr, betas=(beta1, beta2))
 
@@ -81,8 +80,6 @@ train_hist = {
 	'G_loss': []
 }
 
-examples_seen = 0
-current_size = 4
 for epoch in tqdm(range(1,n_epochs+1)):
 	D_losses = []
 	G_losses = []
@@ -91,9 +88,6 @@ for epoch in tqdm(range(1,n_epochs+1)):
             img = img.cuda()
 
         x = Variable(img)
-        if x.size(-1) > current_size:
-            ratio = int(x.size(0)/current_size)
-            x = F.avg_pool2d(x, ratio)
         
         # D training, n_critic=1
         for p in D.parameters():
@@ -112,7 +106,7 @@ for epoch in tqdm(range(1,n_epochs+1)):
         
         GP = get_gradient_penalty(x, fake, D, gamma, gpu)
         
-        D_err = torch.mean(D_real) - torch.mean(D_fake) + lambda_*GP + epsilon_drift*torch.mean(D_real**2)
+        D_err = torch.mean(D_real) - torch.mean(D_fake) + lambda_*GP
         D_optimiser.step()
         
         # G training
@@ -128,20 +122,8 @@ for epoch in tqdm(range(1,n_epochs+1)):
         G_err = torch.mean(D(fake))
         G_optimiser.step()
         
-        examples_seen += img.size(0)
-
         D_losses.append(D_err)
         G_losses.append(G_err)
-    
-    # we grow every n_samples_seen images (more or less bacause we wait for the end of the epoch anyway)
-    if examples_seen > n_samples_seen:
-        examples_seen = 0
-        current_size *= 2
-        G.grow()
-        G_optimiser.add_param_group({'params': G.new_parameters})
-        D.grow()
-        D_optimiser.add_param_group({'params': D.new_parameters})
-        print('Generator grown, current size is', current_size)
 
     # generates samples with fixed noise
     fake = G(fixed_z)

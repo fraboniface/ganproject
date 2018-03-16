@@ -132,3 +132,66 @@ class GrowingDiscriminator(nn.Module):
         self.from_rgb = nn.Conv2d(3, self.current_nfm, 1, 1, 0, bias=False)
         
         self.new_parameters = nn.Sequential(*block).parameters()
+
+
+class Generator(nn.Module):
+    def __init__(self, zdim=100, n_feature_maps=64):
+        super(Generator, self).__init__()
+        self.main = nn.Sequential(
+            #1x1
+            nn.ConvTranspose2d(zdim, 8*n_feature_maps, 4, 1, 0, bias=False),
+            nn.BatchNorm2d(8*n_feature_maps),
+            nn.ReLU(True),
+            #4x4
+            nn.ConvTranspose2d(8*n_feature_maps, 4*n_feature_maps, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(4*n_feature_maps),
+            nn.ReLU(True),
+            #8x8
+            nn.ConvTranspose2d(4*n_feature_maps, 2*n_feature_maps, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(2*n_feature_maps),
+            nn.ReLU(True),
+            #16x16
+            nn.ConvTranspose2d(2*n_feature_maps, n_feature_maps, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(n_feature_maps),
+            nn.ReLU(True),
+            #32x32
+            nn.ConvTranspose2d(n_feature_maps, 3, 4, 2, 1, bias=False),
+            #64x64
+            nn.Tanh()
+        )
+        
+    def  forward(self, x):
+        return self.main(x)
+
+
+class Discriminator(nn.Module):
+    def __init__(self, n_feature_maps=64):
+        super(Discriminator, self).__init__()
+        self.main = nn.Sequential(
+            #64x64
+            nn.Conv2d(3, n_feature_maps, 4, 2, 1, bias=False),
+            nn.LeakyReLU(0.2, inplace=True),
+            #32x32
+            nn.Conv2d(n_feature_maps, 2*n_feature_maps, 4, 2, 1, bias=False),
+            nn.LeakyReLU(0.2, inplace=True),
+            #16x16
+            nn.Conv2d(2*n_feature_maps, 4*n_feature_maps, 4, 2, 1, bias=False),
+            nn.LeakyReLU(0.2, inplace=True),
+            #8x8
+            nn.Conv2d(4*n_feature_maps, 8*n_feature_maps, 4, 2, 1, bias=False),
+            nn.LeakyReLU(0.2, inplace=True)
+            )
+        self.output = nn.Sequential(
+            # 4x4
+            nn.Conv2d(8*n_feature_maps, 1, 4, 1, 0, bias=False),
+            #1x1
+            nn.Sigmoid()
+        )
+        
+    def  forward(self, x, matching=False):
+        x = self.main(x)
+        if matching :
+            return x
+        else:
+            output = self.output(x)
+            return output.view(-1, 1).squeeze(1)
