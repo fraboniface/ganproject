@@ -14,7 +14,7 @@ from tqdm import tqdm
 from dataset import *
 from model import *
 
-model_name = 'ACGauGAN'
+model_name = 'InfoACGauGAN'
 dataset_name = 'paintings64'
 SAVE_FOLDER = '../results/samples/{}/'.format(dataset_name)
 RESULTS_FOLDER = '../results/saved_data/'
@@ -27,6 +27,10 @@ img_size = 64
 n_feature_maps = 128
 n_epochs = 60
 
+INFO = True
+if INFO:
+	n_info_vars = 2
+	lambda_ = 0.5
 
 # *****************************DATA HANDLING**************************************
 
@@ -54,11 +58,14 @@ def weights_init(m):
 		m.weight.data.normal_(1.0, 0.02)
 		m.bias.data.fill_(0)
 
-z_size = 100
+z_size = 100 # the last n_info_vars are the code, with the same prior as the rest of z
 G = Generator(z_size + n_genre_classes + n_style_classes, n_feature_maps)
 G.apply(weights_init)
 
-D = ACDiscriminator(n_genre_classes, n_style_classes, n_feature_maps)
+if INFO:
+	D = Q_ACDiscriminator(n_genre_classes, n_style_classes, n_feature_maps, n_info_vars)
+else:
+	D = ACDiscriminator(n_genre_classes, n_style_classes, n_feature_maps)
 D.apply(weights_init)
 
 print("Model created.")
@@ -80,6 +87,12 @@ style_weights = 1 / torch.Tensor(style_weights)
 style_criterion = nn.CrossEntropyLoss(style_weights)
 
 feature_matching_criterion = nn.MSELoss()
+
+if INFO:
+	def log_gaussian(mean, var, x):
+		"""Arguments are vectors"""
+		log = -1/2 * torch.log(2*np.pi*var) - (x-mean)**2 / (2*var)
+		return log.sum(1).mean()
 
 
 # **********************FIXED INPUT FOR MONITORING PROGRESS ON GENERATION********************
@@ -148,15 +161,19 @@ train_hist = {
 	'D_loss': [],
 	'G_loss': []
 }
+if INFO:
+	train_hist['milb'] = []
 
-
-# ************************************TRAINNING LOOP*********************************************
+# ************************************TRAINING LOOP*********************************************
 
 for epoch in tqdm(range(1,n_epochs+1)):
 	print("Epoch starting...")
 	i = 0
 	D_losses = []
 	G_losses = []
+	if INFO:
+		milbs = []
+
 	for img, genres, styles in dataloader:
 		i += 1
 		print('Epoch {}, batch {} starting...'.format(epoch, i))
@@ -177,7 +194,10 @@ for epoch in tqdm(range(1,n_epochs+1)):
 		D.zero_grad()
 
 		# ******************* REAL DATA ********************
-		D_real_source, D_real_genre, D_real_style = D(x)
+		if INFO:
+			D_real_source, D_real_genre, D_real_style = D(x, mode='D', input_source='real')
+		else:
+			D_real_source, D_real_genre, D_real_style = D(x)
 
 		D_real_Ls = source_criterion(D_real_source, ones)
 		D_real_Lc_genre = genre_criterion(D_real_genre, genres)
@@ -200,14 +220,23 @@ for epoch in tqdm(range(1,n_epochs+1)):
 		genre = Variable(genre)
 		style = Variable(style)
 		fake_data = G(z)
-		D_fake_source, D_fake_genre, D_fake_style = D(fake_data.detach())
+		if INFO:
+			D_fake_source, D_fake_genre, D_fake_style, mean_c_x, var_c_x = D(fake_data.detach(), mode='D', input_source='fake')
+		else:
+			D_fake_source, D_fake_genre, D_fake_style = D(fake_data.detach())
+
 		D_fake_Ls = source_criterion(D_fake_source, zeros)
 		D_fake_Lc_genre = genre_criterion(D_fake_genre, genre)
 		D_fake_Lc_style = style_criterion(D_fake_style, style)
 		D_fake_error = D_fake_Ls + D_fake_Lc_genre + D_fake_Lc_style
 
-		# *******ERROR BACKPROP AND OPTIMISER STEP***************
 		D_loss = D_real_error + D_fake_error
+
+		if INFO:
+			Q_obj = log_gaussian(z[-1,-n_info_vars:,:,:], mean_c_x, var_c_x)
+			D_loss -= lambda_*Q_obj
+
+		# *******ERROR BACKPROP AND OPTIMISER STEP***************
 		D_loss.backward()
 
 		D_optimiser.step()
@@ -232,7 +261,12 @@ for epoch in tqdm(range(1,n_epochs+1)):
 		style = Variable(style)
 		fake_data = G(z)
 		real_features = D(x, only_fm=True)
-		fake_features, D_fake_genre, D_fake_style = D(fake_data, fm=True)
+
+		if INFO:
+			fake_features, D_fake_genre, D_fake_style, mean_c_x, var_c_x = D(fake_data.detach(), mode='G', input_source='fake')
+		else:
+			fake_features, D_fake_genre, D_fake_style = D(fake_data, fm=True)
+
 		real_mean = torch.mean(real_features, 0)
 		fake_mean = torch.mean(fake_features, 0)
 		G_error = feature_matching_criterion(fake_mean, real_mean.detach())
@@ -241,11 +275,18 @@ for epoch in tqdm(range(1,n_epochs+1)):
 		DG_error = DG_Lc_genre + DG_Lc_style
 
 		G_loss = G_error + DG_error
+
+		if INFO:
+			QG_obj = log_gaussian(z[-1,-n_info_vars:,:,:], mean_c_x, var_c_x)
+			G_loss -= lambda_*QG_obj
+
 		G_loss.backward()
 		G_optimiser.step()
 
 		D_losses.append(D_loss)
 		G_losses.append(G_losses)
+		if INFO:
+			milbs.append(QG_obj)
 
 
 	# ***************************** SAVE SAMPLES AND LOSSES AFTER EACH EPOCH *******************************
@@ -261,6 +302,9 @@ for epoch in tqdm(range(1,n_epochs+1)):
 
 	train_hist['D_loss'].append(np.array(D_losses).mean())
 	train_hist['G_loss'].append(np.array(G_losses).mean())
+	if INFO:
+		train_hist['milb'].append(np.array(milbs).mean())
+
 	with open(RESULTS_FOLDER + 'losses_{}_{}.p'.format(dataset_name, model_name), 'wb') as f:
 	    pickle.dump(train_hist, f)
 	print("Losses saved")
