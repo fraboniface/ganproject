@@ -15,7 +15,7 @@ from dataset import *
 from model import *
 
 model_name = 'ACGauGAN'
-
+dataset_name = 'paintings64'
 SAVE_FOLDER = '../results/samples/{}/'.format(dataset_name)
 RESULTS_FOLDER = '../results/saved_data/'
 
@@ -32,14 +32,16 @@ n_epochs = 60
 
 transform = transforms.Compose(
 [
-    transforms.ToTensor(),
-    transforms.Normalize((0.5,0.5,0.5), (0.5,0.5,0.5))
+	transforms.ToTensor(),
+	transforms.Normalize((0.5,0.5,0.5), (0.5,0.5,0.5))
 ])
 dataset = PaintingsDataset('../info/dataset_info.csv', '../paintings64', transform=transform)
 dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=2)
 
 n_genre_classes = len(dataset.genres)
 n_style_classes = len(dataset.styles)
+
+print("Dataset created, containing {} samples".format(len(dataset)))
 
 
 # ********************************MODEL CREATION*******************************
@@ -59,6 +61,7 @@ G.apply(weights_init)
 D = ACDiscriminator(n_genre_classes, n_style_classes, n_feature_maps)
 D.apply(weights_init)
 
+print("Model created.")
 
 # ************************************LOSSES**************************************
 
@@ -68,11 +71,11 @@ source_criterion = nn.BCELoss()
 ones = Variable(torch.FloatTensor(batch_size).uniform_(0.9,1)) # label smoothing
 zeros = Variable(torch.zeros(batch_size))
 
-genre_weights = dataset.samples_per_genre
+genre_weights = np.array(dataset.samples_per_genre, dtype=np.float)
 genre_weights = 1 / torch.Tensor(genre_weights)
 genre_criterion = nn.CrossEntropyLoss(genre_weights)
 
-style_weights = dataset.samples_per_style
+style_weights = np.array(dataset.samples_per_style, dtype=np.float)
 style_weights = 1 / torch.Tensor(style_weights)
 style_criterion = nn.CrossEntropyLoss(style_weights)
 
@@ -136,11 +139,13 @@ beta2 = 0.999
 G_optimiser = optim.Adam(G.parameters(), lr=lr, betas=(beta1, beta2))
 D_optimiser = optim.Adam(D.parameters(), lr=lr, betas=(beta1, beta2))
 
+print("Optimisers created.")
+
 
 # ***********************************TRAINING HISTORY**************************************
 
 train_hist = {
-	'D_loss': []
+	'D_loss': [],
 	'G_loss': []
 }
 
@@ -148,9 +153,13 @@ train_hist = {
 # ************************************TRAINNING LOOP*********************************************
 
 for epoch in tqdm(range(1,n_epochs+1)):
+	print("Epoch starting...")
+	i = 0
 	D_losses = []
 	G_losses = []
 	for img, genres, styles in dataloader:
+		i += 1
+		print('Epoch {}, batch {} starting...'.format(epoch, i))
 		if img.size(0) < batch_size:
 			continue
 		if gpu:
@@ -172,7 +181,7 @@ for epoch in tqdm(range(1,n_epochs+1)):
 
 		D_real_Ls = source_criterion(D_real_source, ones)
 		D_real_Lc_genre = genre_criterion(D_real_genre, genres)
-		D_real_Lc_style = genre_criterion(D_real_style, styles)
+		D_real_Lc_style = style_criterion(D_real_style, styles)
 		D_real_error = D_real_Ls + D_real_Lc_genre + D_real_Lc_style
 
 		#******************** FAKE DATA ***********************
@@ -184,13 +193,17 @@ for epoch in tqdm(range(1,n_epochs+1)):
 		z = torch.cat([z, genre_oh, style_oh], 1)
 		if gpu:
 			z = z.cuda()
+			genre= genre.cuda()
+			style = style.cuda()
 
 		z = Variable(z)
+		genre = Variable(genre)
+		style = Variable(style)
 		fake_data = G(z)
 		D_fake_source, D_fake_genre, D_fake_style = D(fake_data.detach())
 		D_fake_Ls = source_criterion(D_fake_source, zeros)
 		D_fake_Lc_genre = genre_criterion(D_fake_genre, genre)
-		D_fake_Lc_style = genre_criterion(D_fake_style, style)
+		D_fake_Lc_style = style_criterion(D_fake_style, style)
 		D_fake_error = D_fake_Ls + D_fake_Lc_genre + D_fake_Lc_style
 
 		# *******ERROR BACKPROP AND OPTIMISER STEP***************
@@ -211,8 +224,12 @@ for epoch in tqdm(range(1,n_epochs+1)):
 		z = torch.cat([z, genre_oh, style_oh], 1)
 		if gpu:
 			z = z.cuda()
+			genre= genre.cuda()
+			style = style.cuda()
 
 		z = Variable(z)
+		genre = Variable(genre)
+		style = Variable(style)
 		fake_data = G(z)
 		real_features = D(x, only_fm=True)
 		fake_features, D_fake_genre, D_fake_style = D(fake_data, fm=True)
@@ -220,8 +237,8 @@ for epoch in tqdm(range(1,n_epochs+1)):
 		fake_mean = torch.mean(fake_features, 0)
 		G_error = feature_matching_criterion(fake_mean, real_mean.detach())
 		DG_Lc_genre = genre_criterion(D_fake_genre, genre)
-		DG_Lc_style = genre_criterion(D_fake_style, style)
-		DG_error = DG_fake_Lc_genre + DG_fake_Lc_style
+		DG_Lc_style = style_criterion(D_fake_style, style)
+		DG_error = DG_Lc_genre + DG_Lc_style
 
 		G_loss = G_error + DG_error
 		G_loss.backward()
@@ -233,14 +250,17 @@ for epoch in tqdm(range(1,n_epochs+1)):
 
 	# ***************************** SAVE SAMPLES AND LOSSES AFTER EACH EPOCH *******************************
 
-    fake = G(fixed_z)
-    vutils.save_image(fake.data, '{}{}__samples_epoch_{}.png'.format(SAVE_FOLDER, model_name, epoch), normalize=True, nrow=n_samples_per_class)
+	fake = G(fixed_z)
+	vutils.save_image(fake.data, '{}{}__samples_epoch_{}.png'.format(SAVE_FOLDER, model_name, epoch), normalize=True, nrow=n_samples_per_class)
+	print("Samples saved")
 
-    # saves everything, overwriting previous epochs
-    torch.save(G.state_dict(), RESULTS_FOLDER + '{}_{}_generator'.format(dataset_name, model_name))
-    torch.save(D.state_dict(), RESULTS_FOLDER + '{}_{}_discriminator'.format(dataset_name, model_name))
+	# saves everything, overwriting previous epochs
+	torch.save(G.state_dict(), RESULTS_FOLDER + '{}_{}_generator'.format(dataset_name, model_name))
+	torch.save(D.state_dict(), RESULTS_FOLDER + '{}_{}_discriminator'.format(dataset_name, model_name))
+	print("Model saved")
 
-    train_hist['D_loss'].append(np.array(D_losses).mean())
-    train_hist['G_loss'].append(np.array(G_losses).mean())
-    with open(RESULTS_FOLDER + 'losses_{}_{}.p'.format(dataset_name, model_name), 'wb') as f:
-        pickle.dump(train_hist, f)
+	train_hist['D_loss'].append(np.array(D_losses).mean())
+	train_hist['G_loss'].append(np.array(G_losses).mean())
+	with open(RESULTS_FOLDER + 'losses_{}_{}.p'.format(dataset_name, model_name), 'wb') as f:
+	    pickle.dump(train_hist, f)
+	print("Losses saved")

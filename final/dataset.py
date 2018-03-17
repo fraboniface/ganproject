@@ -33,7 +33,6 @@ class PaintingsDataset(Dataset):
             'religious painting': 'religious_paintings'
         }
         
-        print(self.data.head())
 
     def get_dataframe(self):
 
