@@ -1,7 +1,29 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.nn.modules import conv
+from torch.nn.modules.utils import _pair
 
+
+def l2normalize(v, eps=1e-12):
+    return v / (((v**2).sum())**0.5 + eps)
+
+def max_singular_value(W, u=None, n_iter=1):
+    """
+    power iteration for weight parameter
+    """
+    if u is None:
+        u = torch.FloatTensor(1, W.size(0)).normal_(0, 1)
+        if torch.cuda.is_available():
+            u = u.cuda()
+        
+    for i in range(n_iter):
+        v = l2normalize(torch.matmul(u, W))
+        u = l2normalize(torch.matmul(v, torch.transpose(W, 0, 1)))
+        
+    sigma = torch.sum(F.linear(u, torch.transpose(W, 0, 1)) * v)
+    return sigma, u
+    
 
 class MinibatchSDLayer(nn.Module):
     def __init__(self):
@@ -11,6 +33,26 @@ class MinibatchSDLayer(nn.Module):
         mean_batch_std = x.std(0).mean()
         mean_batch_std = mean_batch_std.expand(x.size(0), 1, x.size(-1), x.size(-1))
         return torch.cat([x, mean_batch_std], 1)
+    
+    
+class SNConv2d(conv._ConvNd):
+    def __init__(self, in_channels, out_channels, kernel_size, stride=1, padding=0, dilation=1, groups=1, bias=True):
+        kernel_size = _pair(kernel_size)
+        stride = _pair(stride)
+        padding = _pair(padding)
+        dilation = _pair(dilation)
+        super(SNConv2d, self).__init__(in_channels, out_channels, kernel_size, stride, padding, dilation, False, _pair(0), groups, bias)
+        self.u = None
+
+    @property
+    def W_(self):
+        w_mat = self.weight.data.view(self.weight.size(0), -1)
+        sigma, u = max_singular_value(w_mat, self.u)
+        self.u = u
+        return self.weight / sigma
+
+    def forward(self, input):
+        return F.conv2d(input, self.W_, self.bias, self.stride, self.padding, self.dilation, self.groups)
         
 
 class GrowingGenerator(nn.Module):
@@ -23,16 +65,16 @@ class GrowingGenerator(nn.Module):
         
         self.layers = [
             #1x1
-            nn.ConvTranspose2d(zdim, init_nfm, 4, 1, 0, bias=False),
+            nn.ConvTranspose2d(zdim, init_nfm, 4, 1, 0, bias=True),
             nn.LeakyReLU(0.2, inplace=True),
             #4x4
-            nn.Conv2d(init_nfm, init_nfm, 3, 1, 1, bias=False),
+            nn.Conv2d(init_nfm, init_nfm, 3, 1, 1, bias=True),
             nn.LeakyReLU(0.2, inplace=True)
             #4x4
         ]
         self.main = nn.Sequential(*self.layers)
         
-        self.to_rgb = nn.Conv2d(init_nfm, 3, 1, 1, 0, bias=False)
+        self.to_rgb = nn.Conv2d(init_nfm, 3, 1, 1, 0, bias=True)
         self.current_size = init_size
         self.current_nfm = init_nfm
                 
@@ -53,9 +95,9 @@ class GrowingGenerator(nn.Module):
             
         block = [
             nn.Upsample(scale_factor=2, mode='nearest'),
-            nn.Conv2d(self.current_nfm, future_nfm, 3, 1, 1, bias=False),
+            nn.Conv2d(self.current_nfm, future_nfm, 3, 1, 1, bias=True),
             nn.LeakyReLU(0.2, inplace=True),
-            nn.Conv2d(future_nfm, future_nfm, 3, 1, 1, bias=False),
+            nn.Conv2d(future_nfm, future_nfm, 3, 1, 1, bias=True),
             nn.LeakyReLU(0.2, inplace=True)
         ]
         self.layers += block
@@ -63,31 +105,31 @@ class GrowingGenerator(nn.Module):
         
         self.current_size *= 2
         self.current_nfm = future_nfm
-        self.to_rgb = nn.Conv2d(self.current_nfm, 3, 1, 1, 0, bias=False)
+        self.to_rgb = nn.Conv2d(self.current_nfm, 3, 1, 1, 0, bias=True)
         
         self.new_parameters = nn.Sequential(*block).parameters()
         
         
-class GrowingDiscriminator(nn.Module):
+class SNGrowingDiscriminator(nn.Module):
     def __init__(self, init_size=4, final_size=128, n_feature_maps=128):
-        super(GrowingDiscriminator, self).__init__()
+        super(SNGrowingDiscriminator, self).__init__()
         self.init_size = init_size
         self.final_size = final_size
         init_nfm = 8 * n_feature_maps
         
         self.from_rgb = nn.Sequential(
-            nn.Conv2d(3, init_nfm, 1, 1, 0, bias=False),
+            SNConv2d(3, init_nfm, 1, 1, 0, bias=True),
             nn.LeakyReLU(0.2, inplace=True)
         )
         
         self.layers = [
             MinibatchSDLayer(),
             #4x4
-            nn.Conv2d(init_nfm+1, init_nfm, 3, 1, 1, bias=False),
+            SNConv2d(init_nfm+1, init_nfm, 3, 1, 1, bias=True),
             nn.LeakyReLU(0.2, inplace=True),
             #4x4
             #nn.Conv2d(init_nfm, init_nfm, 4, 1, 0, bias=False),
-            nn.Conv2d(init_nfm, 1, 4, 1, 0, bias=False),
+            SNConv2d(init_nfm, 1, 4, 1, 0, bias=False),
             #nn.LeakyReLU(0.2, inplace=True),
             #1x1
             #nn.Conv2d(init_nfm, 1, 1, 1, 0, bias=False) # equivalent to fully connected
@@ -118,9 +160,9 @@ class GrowingDiscriminator(nn.Module):
             future_nfm = int(self.current_nfm / 2)
         
         block = [
-            nn.Conv2d(future_nfm, future_nfm, 3, 1, 1, bias=False),
+            SNConv2d(future_nfm, future_nfm, 3, 1, 1, bias=False),
             nn.LeakyReLU(0.2, inplace=True),
-            nn.Conv2d(future_nfm, self.current_nfm, 3, 1, 1, bias=False),
+            SNConv2d(future_nfm, self.current_nfm, 3, 1, 1, bias=False),
             nn.LeakyReLU(0.2, inplace=True),
             nn.AvgPool2d(2)
         ]
@@ -129,7 +171,7 @@ class GrowingDiscriminator(nn.Module):
         
         self.current_size *= 2
         self.current_nfm = future_nfm
-        self.from_rgb = nn.Conv2d(3, self.current_nfm, 1, 1, 0, bias=False)
+        self.from_rgb = SNConv2d(3, self.current_nfm, 1, 1, 0, bias=False)
         
         self.new_parameters = nn.Sequential(*block).parameters()
 
@@ -164,26 +206,26 @@ class Generator(nn.Module):
         return self.main(x)
 
 
-class Discriminator(nn.Module):
+class SNDiscriminator(nn.Module):
     def __init__(self, n_feature_maps=64):
-        super(Discriminator, self).__init__()
+        super(SNDiscriminator, self).__init__()
         self.main = nn.Sequential(
             #64x64
-            nn.Conv2d(3, n_feature_maps, 4, 2, 1, bias=False),
+            SNConv2d(3, n_feature_maps, 4, 2, 1, bias=False),
             nn.LeakyReLU(0.2, inplace=True),
             #32x32
-            nn.Conv2d(n_feature_maps, 2*n_feature_maps, 4, 2, 1, bias=False),
+            SNConv2d(n_feature_maps, 2*n_feature_maps, 4, 2, 1, bias=False),
             nn.LeakyReLU(0.2, inplace=True),
             #16x16
-            nn.Conv2d(2*n_feature_maps, 4*n_feature_maps, 4, 2, 1, bias=False),
+            SNConv2d(2*n_feature_maps, 4*n_feature_maps, 4, 2, 1, bias=False),
             nn.LeakyReLU(0.2, inplace=True),
             #8x8
-            nn.Conv2d(4*n_feature_maps, 8*n_feature_maps, 4, 2, 1, bias=False),
+            SNConv2d(4*n_feature_maps, 8*n_feature_maps, 4, 2, 1, bias=False),
             nn.LeakyReLU(0.2, inplace=True)
             )
         self.output = nn.Sequential(
             # 4x4
-            nn.Conv2d(8*n_feature_maps, 1, 4, 1, 0, bias=False),
+            SNConv2d(8*n_feature_maps, 1, 4, 1, 0, bias=False),
             #1x1
             nn.Sigmoid()
         )

@@ -41,7 +41,7 @@ dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle
 n_genre_classes = len(dataset.genres)
 n_style_classes = len(dataset.styles)
 
-print("Dataset created, containing {} samples".format(len(dataset)))
+print("Dataset created, containing {} samples.".format(len(dataset)))
 
 
 # ********************************MODEL CREATION*******************************
