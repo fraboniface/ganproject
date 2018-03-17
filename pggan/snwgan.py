@@ -53,7 +53,8 @@ lr = 1e-3
 beta1 = 0.5
 beta2 = 0.999
 G_optimiser = optim.Adam(G.parameters(), lr=lr, betas=(beta1, beta2))
-D_optimiser = optim.Adam(D.parameters(), lr=lr, betas=(beta1, beta2))
+#D_optimiser = optim.Adam(D.parameters(), lr=lr, betas=(beta1, beta2))
+D_optimiser = optim.Adam(filter(lambda p: p.requires_grad, D.parameters()), lr=lr, betas=(beta1, beta2))
 
 train_hist = {
     'D_loss': [],
@@ -101,7 +102,7 @@ for epoch in tqdm(range(1,n_epochs+1)):
         G_optimiser.step()
 
         D_losses.append(D_err)
-        G_losses.append(G_err)
+        G_losses.append(G_err)  
 
     # generates samples with fixed noise
     fake = G(fixed_z)

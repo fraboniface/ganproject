@@ -3,27 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn.modules import conv
 from torch.nn.modules.utils import _pair
-
-
-def l2normalize(v, eps=1e-12):
-    return v / (((v**2).sum())**0.5 + eps)
-
-def max_singular_value(W, u=None, n_iter=1):
-    """
-    power iteration for weight parameter
-    """
-    if u is None:
-        u = torch.FloatTensor(1, W.size(0)).normal_(0, 1)
-        if torch.cuda.is_available():
-            u = u.cuda()
-        
-    for i in range(n_iter):
-        v = l2normalize(torch.matmul(u, W))
-        u = l2normalize(torch.matmul(v, torch.transpose(W, 0, 1)))
-        
-    sigma = torch.sum(F.linear(u, torch.transpose(W, 0, 1)) * v)
-    return sigma, u
-    
+  
 
 class MinibatchSDLayer(nn.Module):
     def __init__(self):
@@ -33,6 +13,25 @@ class MinibatchSDLayer(nn.Module):
         mean_batch_std = x.std(0).mean()
         mean_batch_std = mean_batch_std.expand(x.size(0), 1, x.size(-1), x.size(-1))
         return torch.cat([x, mean_batch_std], 1)
+
+
+def l2normalize(v, eps=1e-12):
+    return v / (v.norm() + eps)
+
+def max_singular_value(W, u=None, Ip=1):
+    """
+    power iteration for weight parameter
+    """
+    if u is None:
+        u = torch.FloatTensor(1, W.size(0)).normal_()
+        
+    _u = u
+    for _ in range(Ip):
+        _v = l2normalize(torch.matmul(_u, W), eps=1e-12)
+        _u = l2normalize(torch.matmul(_v, torch.transpose(W, 0, 1)), eps=1e-12)
+        
+    sigma = torch.sum(F.linear(_u, torch.transpose(W, 0, 1)) * _v)
+    return sigma, _u
     
     
 class SNConv2d(conv._ConvNd):
@@ -42,17 +41,19 @@ class SNConv2d(conv._ConvNd):
         padding = _pair(padding)
         dilation = _pair(dilation)
         super(SNConv2d, self).__init__(in_channels, out_channels, kernel_size, stride, padding, dilation, False, _pair(0), groups, bias)
-        self.u = None
+        self.u = nn.Parameter(torch.Tensor(1, out_channels).normal_(), requires_grad=False)
+        #self.u = torch.Tensor(1, out_channels).normal_()
 
     @property
     def W_(self):
-        w_mat = self.weight.data.view(self.weight.size(0), -1)
-        sigma, u = max_singular_value(w_mat, self.u)
-        self.u = u
+        w_mat = self.weight.view(self.weight.size(0), -1).data
+        sigma, _u = max_singular_value(w_mat, self.u.data)
+        self.u.data = _u
         return self.weight / sigma
 
     def forward(self, input):
         return F.conv2d(input, self.W_, self.bias, self.stride, self.padding, self.dilation, self.groups)
+    
         
 
 class GrowingGenerator(nn.Module):
