@@ -94,6 +94,7 @@ for epoch in tqdm(range(1,n_epochs+1)):
 		fake = G(z)
 		D_fake = D(fake.detach())        
 		D_err = torch.mean(D_real) - torch.mean(D_fake) + epsilon_drift*torch.mean(D_real**2)
+		D_err.backward()
 		D_optimiser.step()
 
 		# G training
@@ -109,6 +110,7 @@ for epoch in tqdm(range(1,n_epochs+1)):
 		z = Variable(z)
 		fake = G(z)
 		G_err = torch.mean(D(fake))
+		G_err.backward()
 		G_optimiser.step()
 
 		examples_seen += x.size(0)

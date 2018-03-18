@@ -308,7 +308,7 @@ class SNDiscriminator(nn.Module):
             # 4x4
             SNConv2d(8*n_feature_maps, 1, 4, 1, 0, bias=False),
             #1x1
-            nn.Sigmoid()
+            #nn.Sigmoid()
         )
         
     def  forward(self, x, matching=False):

@@ -53,7 +53,6 @@ lr = 1e-3
 beta1 = 0.5
 beta2 = 0.999
 G_optimiser = optim.Adam(G.parameters(), lr=lr, betas=(beta1, beta2))
-#D_optimiser = optim.Adam(D.parameters(), lr=lr, betas=(beta1, beta2))
 D_optimiser = optim.Adam(filter(lambda p: p.requires_grad, D.parameters()), lr=lr, betas=(beta1, beta2))
 
 train_hist = {
@@ -64,7 +63,7 @@ train_hist = {
 for epoch in tqdm(range(1,n_epochs+1)):
     D_losses = []
     G_losses = []
-    for x, label in dataloader:
+    for x, labels in dataloader:
         if gpu:
             x = x.cuda()
 
@@ -85,6 +84,7 @@ for epoch in tqdm(range(1,n_epochs+1)):
         fake = G(z)
         D_fake = D(fake.detach())        
         D_err = torch.mean(D_real) - torch.mean(D_fake)
+        D_err.backward()
         D_optimiser.step()
 
         # G training
@@ -100,6 +100,7 @@ for epoch in tqdm(range(1,n_epochs+1)):
         z = Variable(z)
         fake = G(z)
         G_err = torch.mean(D(fake))
+        G_err.backward()
         G_optimiser.step()
 
         D_losses.append(D_err)
