@@ -111,7 +111,7 @@ for epoch in tqdm(range(1,n_epochs+1)):
 		G_err = torch.mean(D(fake))
 		G_optimiser.step()
 
-		examples_seen += img.size(0)
+		examples_seen += x.size(0)
 
 		if G.transitioning:
 			G.alpha = alphas[i]

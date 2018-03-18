@@ -162,18 +162,18 @@ class GrowingDiscriminator(nn.Module):
         init_nfm = 8 * n_feature_maps
         
         self.from_rgb = nn.Sequential(
-            SNConv2d(3, init_nfm, 1, 1, 0, bias=False),
+            nn.Conv2d(3, init_nfm, 1, 1, 0, bias=False),
             nn.LeakyReLU(0.2, inplace=True)
         )
         
         self.layers = [
             MinibatchSDLayer(),
             #4x4
-            SNConv2d(init_nfm+1, init_nfm, 3, 1, 1, bias=False),
+            nn.Conv2d(init_nfm+1, init_nfm, 3, 1, 1, bias=False),
             nn.LeakyReLU(0.2, inplace=True),
             #4x4
             #nn.Conv2d(init_nfm, init_nfm, 4, 1, 0, bias=False),
-            SNConv2d(init_nfm, 1, 4, 1, 0, bias=False),
+            nn.Conv2d(init_nfm, 1, 4, 1, 0, bias=False),
             #nn.LeakyReLU(0.2, inplace=True),
             #1x1
             #nn.Conv2d(init_nfm, 1, 1, 1, 0, bias=False) # equivalent to fully connected
@@ -240,9 +240,9 @@ class GrowingDiscriminator(nn.Module):
         self.old_rgb = self.from_rgb
         
         block = [
-            SNConv2d(future_nfm, future_nfm, 3, 1, 1, bias=False),
+            nn.Conv2d(future_nfm, future_nfm, 3, 1, 1, bias=False),
             nn.LeakyReLU(0.2, inplace=True),
-            SNConv2d(future_nfm, self.current_nfm, 3, 1, 1, bias=False),
+            nn.Conv2d(future_nfm, self.current_nfm, 3, 1, 1, bias=False),
             nn.LeakyReLU(0.2, inplace=True),
             nn.AvgPool2d(2)
         ]
@@ -252,7 +252,7 @@ class GrowingDiscriminator(nn.Module):
         
         self.current_size *= 2
         self.current_nfm = future_nfm
-        self.from_rgb = SNConv2d(3, self.current_nfm, 1, 1, 0, bias=False)
+        self.from_rgb = nn.Conv2d(3, self.current_nfm, 1, 1, 0, bias=False)
         
         self.new_parameters = nn.Sequential(*block).parameters()
 
