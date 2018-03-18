@@ -43,13 +43,6 @@ G.apply(weights_init)
 D = GrowingDiscriminator(init_size, final_size, n_feature_maps)
 D.apply(weights_init)
 
-lr = 2e-4
-beta1 = 0.5
-beta2 = 0.999
-G_optimiser = optim.Adam(G.parameters(), lr=lr, betas=(beta1, beta2))
-#D_optimiser = optim.Adam(D.parameters(), lr=lr, betas=(beta1, beta2))
-D_optimiser = optim.Adam(filter(lambda p: p.requires_grad, D.parameters()), lr=lr, betas=(beta1, beta2))
-
 fixed_z = torch.FloatTensor(batch_size, zdim, 1, 1).normal_(0,1)
 fixed_z = Variable(fixed_z, volatile=True)
 
@@ -59,6 +52,12 @@ if gpu:
 	D.cuda()
 	fixed_z = fixed_z.cuda()
 
+lr = 2e-4
+beta1 = 0.5
+beta2 = 0.999
+G_optimiser = optim.Adam(G.parameters(), lr=lr, betas=(beta1, beta2))
+#D_optimiser = optim.Adam(D.parameters(), lr=lr, betas=(beta1, beta2))
+D_optimiser = optim.Adam(filter(lambda p: p.requires_grad, D.parameters()), lr=lr, betas=(beta1, beta2))
 
 train_hist = {
 	'D_loss': [],
@@ -81,8 +80,8 @@ for epoch in tqdm(range(1,n_epochs+1)):
 			x = F.avg_pool2d(x, ratio)
 
 		# D training, n_critic=1
-		#for p in D.parameters():
-		#	p.requires_grad = True
+		for p in D.parameters():
+			p.requires_grad = True
 
 		D.zero_grad()
 		D_real = D(x)
@@ -98,8 +97,8 @@ for epoch in tqdm(range(1,n_epochs+1)):
 		D_optimiser.step()
 
 		# G training
-		#for p in D.parameters():
-		#	p.requires_grad = False # saves computation
+		for p in D.parameters():
+			p.requires_grad = False # saves computation
 
 		G.zero_grad()
 
