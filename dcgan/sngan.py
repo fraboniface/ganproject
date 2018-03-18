@@ -142,7 +142,7 @@ class Discriminator(nn.Module):
             # 4x4
             SNConv2d(8*n_feature_maps, 1, 4, 1, 0, bias=False),
             #1x1
-            nn.Sigmoid()
+            #nn.Sigmoid()
         )
         
     def  forward(self, x, matching=False):
@@ -165,7 +165,7 @@ lr = 2e-4
 beta1 = 0.5
 beta2 = 0.999
 G_optimiser = optim.Adam(G.parameters(), lr=lr, betas=(beta1, beta2))
-D_optimiser = optim.Adam(D.parameters(), lr=lr, betas=(beta1, beta2))
+D_optimiser = optim.Adam(filter(lambda p: p.requires_grad, D.parameters()), lr=lr, betas=(beta1, beta2))
 
 fixed_z = torch.FloatTensor(batch_size, z_size, 1, 1).normal_(0,1)
 fixed_z = Variable(fixed_z, volatile=True)
