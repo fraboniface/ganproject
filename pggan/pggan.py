@@ -56,7 +56,6 @@ lr = 2e-4
 beta1 = 0.5
 beta2 = 0.999
 G_optimiser = optim.Adam(G.parameters(), lr=lr, betas=(beta1, beta2))
-#D_optimiser = optim.Adam(D.parameters(), lr=lr, betas=(beta1, beta2))
 D_optimiser = optim.Adam(filter(lambda p: p.requires_grad, D.parameters()), lr=lr, betas=(beta1, beta2))
 
 train_hist = {
@@ -133,10 +132,16 @@ for epoch in tqdm(range(1,n_epochs+1)):
 			examples_seen = 0
 			current_size *= 2
 			G.grow()
-			G_optimiser.add_param_group({'params': G.new_parameters})
 			D.grow()
+			if gpu:
+				G.cuda()
+				D.cuda()
+				
+			G_optimiser.add_param_group({'params': G.new_parameters})
 			D_optimiser.add_param_group({'params': filter(lambda p: p.requires_grad, D.new_parameters)})
 			print('Networks grown, current size is', current_size)
+
+			
 
 	# generates samples with fixed noise
 	fake = G(fixed_z)

@@ -296,12 +296,15 @@ class SNDiscriminator(nn.Module):
             nn.LeakyReLU(0.2, inplace=True),
             #32x32
             SNConv2d(n_feature_maps, 2*n_feature_maps, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(2*n_feature_maps),
             nn.LeakyReLU(0.2, inplace=True),
             #16x16
             SNConv2d(2*n_feature_maps, 4*n_feature_maps, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(4*n_feature_maps),
             nn.LeakyReLU(0.2, inplace=True),
             #8x8
             SNConv2d(4*n_feature_maps, 8*n_feature_maps, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(8*n_feature_maps),
             nn.LeakyReLU(0.2, inplace=True)
             )
         self.output = nn.Sequential(
@@ -318,3 +321,30 @@ class SNDiscriminator(nn.Module):
         else:
             output = self.output(x)
             return output.view(-1, 1).squeeze(1)
+
+
+class Discriminator(nn.Module):
+    def __init__(self, n_feature_maps=64):
+        super(Discriminator, self).__init__()
+        self.main = nn.Sequential(
+            #64x64
+            nn.Conv2d(3, n_feature_maps, 4, 2, 1, bias=False),
+            nn.LeakyReLU(0.2, inplace=True),
+            #32x32
+            nn.Conv2d(n_feature_maps, 2*n_feature_maps, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(2*n_feature_maps),
+            nn.LeakyReLU(0.2, inplace=True),
+            #16x16
+            nn.Conv2d(2*n_feature_maps, 4*n_feature_maps, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(4*n_feature_maps),
+            nn.LeakyReLU(0.2, inplace=True),
+            #8x8
+            nn.Conv2d(4*n_feature_maps, 8*n_feature_maps, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(8*n_feature_maps),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Conv2d(8*n_feature_maps, 1, 4, 1, 0, bias=False)
+            )
+
+    def  forward(self, x, matching=False):
+        output = self.main(x)
+        return output.view(-1, 1).squeeze(1)

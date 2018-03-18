@@ -56,7 +56,7 @@ class SNConv2d(conv._ConvNd):
         return F.conv2d(input, self.W_, self.bias, self.stride, self.padding, self.dilation, self.groups)
 
 
-model_name = 'SNDCGAN_fm'
+model_name = 'SNDCGAN_fm_BN'
 dataset_name = 'paintings64'
 
 SAVE_FOLDER = '../results/samples/{}/'.format(dataset_name)
@@ -127,15 +127,15 @@ class Discriminator(nn.Module):
             nn.LeakyReLU(0.2, inplace=True),
             #32x32
             SNConv2d(n_feature_maps, 2*n_feature_maps, 4, 2, 1, bias=False),
-            #nn.BatchNorm2d(2*n_feature_maps),
+            nn.BatchNorm2d(2*n_feature_maps),
             nn.LeakyReLU(0.2, inplace=True),
             #16x16
             SNConv2d(2*n_feature_maps, 4*n_feature_maps, 4, 2, 1, bias=False),
-            #nn.BatchNorm2d(4*n_feature_maps),
+            nn.BatchNorm2d(4*n_feature_maps),
             nn.LeakyReLU(0.2, inplace=True),
             #8x8
             SNConv2d(4*n_feature_maps, 8*n_feature_maps, 4, 2, 1, bias=False),
-            #nn.BatchNorm2d(8*n_feature_maps),
+            nn.BatchNorm2d(8*n_feature_maps),
             nn.LeakyReLU(0.2, inplace=True)
             )
         self.output = nn.Sequential(

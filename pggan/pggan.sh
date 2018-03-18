@@ -30,4 +30,4 @@ export TMP=/disk/scratch/${STUDENT_ID}/
 # Activate the relevant virtual environment:
 source /home/${STUDENT_ID}/miniconda3/bin/activate mlp
 
-python sngan.py
+python pggan.py

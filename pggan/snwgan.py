@@ -7,9 +7,10 @@ import torch.nn.functional as F
 from torchvision  import transforms, datasets
 import torchvision.utils as vutils
 from tqdm import tqdm
+import sys
 from models import *
 
-model_name = 'SNGAN'
+model_name = 'SNWGAN'
 dataset_name = 'paintings64'
 SAVE_FOLDER = '../results/samples/{}/'.format(dataset_name)
 RESULTS_FOLDER = '../results/saved_data/'
@@ -85,6 +86,7 @@ for epoch in tqdm(range(1,n_epochs+1)):
         D_fake = D(fake.detach())        
         D_err = torch.mean(D_real) - torch.mean(D_fake)
         D_err.backward()
+
         D_optimiser.step()
 
         # G training
@@ -101,6 +103,7 @@ for epoch in tqdm(range(1,n_epochs+1)):
         fake = G(z)
         G_err = torch.mean(D(fake))
         G_err.backward()
+        
         G_optimiser.step()
 
         D_losses.append(D_err)
