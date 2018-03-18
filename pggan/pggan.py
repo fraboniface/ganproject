@@ -22,7 +22,8 @@ final_size = 64
 n_epochs = 50
 
 epsilon_drift = 1e-3
-n_samples_seen = 5e5
+n_samples_seen = 3e5
+alphas = np.linspace(0,1,int(n_samples_seen/batch_size)+1)
 
 transform = transforms.Compose(
 	[
@@ -39,7 +40,7 @@ def weights_init(m):
 
 G = GrowingGenerator(zdim, init_size, final_size, n_feature_maps)
 G.apply(weights_init)
-D = SNGrowingDiscriminator(init_size, final_size, n_feature_maps)
+D = GrowingDiscriminator(init_size, final_size, n_feature_maps)
 D.apply(weights_init)
 
 fixed_z = torch.FloatTensor(batch_size, zdim, 1, 1).normal_(0,1)
@@ -66,14 +67,14 @@ train_hist = {
 examples_seen = 0
 current_size = 4
 for epoch in tqdm(range(1,n_epochs+1)):
+	i = 0
 	D_losses = []
 	G_losses = []
-	for img, label in dataloader:
-		print('kjb')
+	for x, label in dataloader:
 		if gpu:
-			img = img.cuda()
+			x = x.cuda()
 
-		x = Variable(img)
+		x = Variable(x)
 		if x.size(-1) > current_size:
 			ratio = int(x.size(0)/current_size)
 			x = F.avg_pool2d(x, ratio)
@@ -82,7 +83,7 @@ for epoch in tqdm(range(1,n_epochs+1)):
 		for p in D.parameters():
 			p.requires_grad = True
 
-		D.zero_grad
+		D.zero_grad()
 		D_real = D(x)
 
 		z = torch.FloatTensor(x.size(0), zdim, 1, 1).normal_()
@@ -99,6 +100,8 @@ for epoch in tqdm(range(1,n_epochs+1)):
 		for p in D.parameters():
 			p.requires_grad = False # saves computation
 
+		G.zero_grad()
+
 		z = torch.FloatTensor(batch_size, zdim, 1, 1).normal_()
 		if gpu:
 			z = z.cuda()
@@ -110,18 +113,28 @@ for epoch in tqdm(range(1,n_epochs+1)):
 
 		examples_seen += img.size(0)
 
+		if G.transitioning:
+			G.alpha = alphas[i]
+			D.alpha = alphas[i]
+			print(G.alpha)
+
 		D_losses.append(D_err)
 		G_losses.append(G_err)
 
 	# we grow every n_samples_seen images (more or less bacause we wait for the end of the epoch anyway)
 	if examples_seen > n_samples_seen:
-		examples_seen = 0
-		current_size *= 2
-		G.grow()
-		G_optimiser.add_param_group({'params': G.new_parameters})
-		D.grow()
-		D_optimiser.add_param_group({'params': D.new_parameters})
-		print('Generator grown, current size is', current_size)
+		if G.transitioning:
+			examples_seen = 0
+			G.transitioning = False
+			D.transitioning = False
+		else:
+			examples_seen = 0
+			current_size *= 2
+			G.grow()
+			G_optimiser.add_param_group({'params': G.new_parameters})
+			D.grow()
+			D_optimiser.add_param_group({'params': filter(lambda p: p.requires_grad, D.new_parameters)})
+			print('Networks grown, current size is', current_size)
 
 	# generates samples with fixed noise
 	fake = G(fixed_z)

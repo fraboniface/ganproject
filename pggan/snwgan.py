@@ -64,18 +64,17 @@ train_hist = {
 for epoch in tqdm(range(1,n_epochs+1)):
     D_losses = []
     G_losses = []
-    for img, label in dataloader:
-        print('kjd')
+    for x, label in dataloader:
         if gpu:
-            img = img.cuda()
+            x = x.cuda()
 
-        x = Variable(img)
+        x = Variable(x)
 
         # D training, n_critic=1
         for p in D.parameters():
             p.requires_grad = True
 
-        D.zero_grad
+        D.zero_grad()
         D_real = D(x)
 
         z = torch.FloatTensor(x.size(0), zdim, 1, 1).normal_()
@@ -91,6 +90,8 @@ for epoch in tqdm(range(1,n_epochs+1)):
         # G training
         for p in D.parameters():
             p.requires_grad = False # saves computation
+
+        G.zero_grad()
 
         z = torch.FloatTensor(batch_size, zdim, 1, 1).normal_()
         if gpu:
