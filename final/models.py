@@ -206,7 +206,7 @@ class GrowingDiscriminator(nn.Module):
         
     def forward(self, x):
         if x.size(3) != self.current_size:
-            print("input is of the wrong size (should be {})".format(self.current_size))
+            print("input is of the wrong size ({} instead of {})".format(x.size(3), self.current_size))
             return
         
         if self.transitioning:

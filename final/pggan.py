@@ -83,6 +83,7 @@ for epoch in tqdm(range(1,n_epochs+1)):
 		if x.size(-1) > current_size:
 			ratio = int(x.size(0)/current_size)
 			x = F.avg_pool2d(x, ratio)
+			print(x.size())
 
 		# D training, n_critic=1
 		for p in D.parameters():

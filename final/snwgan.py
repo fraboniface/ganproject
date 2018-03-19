@@ -23,6 +23,8 @@ zdim = 100
 n_feature_maps = 128
 n_epochs = 100
 
+load_model = True
+
 
 print("Dataset creation...")
 transform = transforms.Compose(
@@ -41,10 +43,16 @@ def weights_init(m):
         m.weight.data.normal_(1.0, 0.02)
         m.bias.data.fill_(0)
 
+
 G = Generator(zdim, n_feature_maps)
-G.apply(weights_init)
 D = SNDiscriminator(n_feature_maps)
-D.apply(weights_init)
+if load_model:
+    G.load_state_dict(torch.load(RESULTS_FOLDER + '{}_{}_generator'.format(dataset_name, model_name), map_location=lambda storage, loc: storage))
+    D.load_state_dict(torch.load(RESULTS_FOLDER + '{}_{}_discriminator'.format(dataset_name, model_name), map_location=lambda storage, loc: storage))
+    print("Model loaded.")
+else:
+    G.apply(weights_init)
+    D.apply(weights_init)
 
 fixed_z = torch.FloatTensor(batch_size, zdim, 1, 1).normal_(0,1)
 fixed_z = Variable(fixed_z, volatile=True)
