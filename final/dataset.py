@@ -1,5 +1,5 @@
 import os
-
+import numpy as np
 import pandas as pd
 from PIL import Image
 from torch.utils.data import Dataset
@@ -13,9 +13,9 @@ def make_dataset(root, df, genre_to_idx, style_to_idx, genre_to_folder):
                 image = Image.open(f)
                 image = image.convert('RGB')
 
-            samples.append((image, genre_to_idx[g], style_to_idx[s]))
+            samples.append(np.array(image))
             
-        return samples
+        return np.array(samples)
             
     
 class PaintingsDataset(Dataset):
@@ -75,7 +75,11 @@ class PaintingsDataset(Dataset):
     
     def __getitem__(self, idx):
         
-        image, genre, style = self.samples[idx]
+        image = self.samples[idx]
+        genre = self.data.loc[idx, 'genre']
+        genre = self.genre_to_idx[genre]
+        style = self.data.loc[idx, 'style']
+        style = self.style_to_idx[style]
 
         if self.transform:
             image = self.transform(image)
