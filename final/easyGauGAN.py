@@ -11,8 +11,8 @@ import torchvision.utils as vutils
 import pickle
 from tqdm import tqdm
 
-from dataset import *
 from model import *
+from dataset import *
 
 model_name = 'InfoACGauGAN'
 dataset_name = 'paintings64'
@@ -33,7 +33,7 @@ if INFO:
 	lambda_ = 0.5
 
 # *****************************DATA HANDLING**************************************
-
+print("Dataset creation")
 transform = transforms.Compose(
 [
 	transforms.ToTensor(),

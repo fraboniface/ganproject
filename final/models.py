@@ -94,7 +94,7 @@ class GrowingGenerator(nn.Module):
         return self._transitioning
         
     @transitioning.setter
-    def alpha(self, v):
+    def transitioning(self, v):
         self._transitioning = v
         
     @property
@@ -191,7 +191,7 @@ class GrowingDiscriminator(nn.Module):
         return self._transitioning
         
     @transitioning.setter
-    def alpha(self, v):
+    def transitioning(self, v):
         self._transitioning = v
         
     @property
@@ -212,7 +212,7 @@ class GrowingDiscriminator(nn.Module):
         if self.transitioning:
             new = self.from_rgb(x)
             new = self.new(new)
-            old = F.avg_pool2d(old, 2)
+            old = F.avg_pool2d(x, 2)
             old = self.old_rgb(old)
             x = self._alpha*new + (1-self._alpha)*old
             output = self.old(x)

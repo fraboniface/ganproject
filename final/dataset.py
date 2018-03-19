@@ -9,7 +9,11 @@ def make_dataset(root, df, genre_to_idx, style_to_idx, genre_to_folder):
         for t in df.itertuples(index=False):
             g, s, filename, _, _ = t
             path = os.path.join(root, genre_to_folder[g], filename)
-            samples.append((path, genre_to_idx[g], style_to_idx[s]))
+            with open(path, 'rb') as f:
+                image = Image.open(f)
+                image = image.convert('RGB')
+
+            samples.append((image, genre_to_idx[g], style_to_idx[s]))
             
         return samples
             
@@ -44,6 +48,7 @@ class PaintingsDataset(Dataset):
         }
         
         self.samples = make_dataset(self.root_dir, self.data, self.genre_to_idx, self.style_to_idx, self.genre_to_folder)
+        print("Dataset loaded in memory.")
 
     def get_dataframe(self):
 
@@ -70,11 +75,7 @@ class PaintingsDataset(Dataset):
     
     def __getitem__(self, idx):
         
-        path, genre, style = self.samples[idx]
-        
-        with open(path, 'rb') as f:
-            image = Image.open(f)
-            image = image.convert('RGB')
+        image, genre, style = self.samples[idx]
 
         if self.transform:
             image = self.transform(image)

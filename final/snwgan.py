@@ -8,7 +8,10 @@ from torchvision  import transforms, datasets
 import torchvision.utils as vutils
 from tqdm import tqdm
 import sys
+import pickle
+
 from models import *
+from dataset import *
 
 model_name = 'SNWGAN'
 dataset_name = 'paintings64'
@@ -18,14 +21,16 @@ RESULTS_FOLDER = '../results/saved_data/'
 batch_size = 64
 zdim = 100
 n_feature_maps = 128
-n_epochs = 50
+n_epochs = 100
 
+
+print("Dataset creation...")
 transform = transforms.Compose(
     [
     transforms.ToTensor(),
     transforms.Normalize((0.5,0.5,0.5), (0.5,0.5,0.5))
     ])
-dataset = datasets.ImageFolder('../paintings64/', transform=transform)
+dataset = PaintingsDataset('../info/dataset_info.csv', '../paintings64', transform=transform)
 dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=2)
 
 def weights_init(m):
@@ -64,7 +69,8 @@ train_hist = {
 for epoch in tqdm(range(1,n_epochs+1)):
     D_losses = []
     G_losses = []
-    for x, labels in dataloader:
+    for x, g, s in dataloader:
+        print("New batch starting")
         if gpu:
             x = x.cuda()
 
