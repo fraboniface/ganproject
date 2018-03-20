@@ -21,7 +21,7 @@ batch_size = 64
 zdim = 100
 n_feature_maps = 128
 init_size = 4
-final_size = 64
+final_size = 128
 n_epochs = 100
 
 epsilon_drift = 1e-3
@@ -35,8 +35,10 @@ transform = transforms.Compose(
 	transforms.ToTensor(),
 	transforms.Normalize((0.5,0.5,0.5), (0.5,0.5,0.5))
 	])
-dataset = PaintingsDataset('../info/dataset_info.csv', '../paintings64', transform=transform)
+#dataset = PaintingsDataset('../info/dataset_info.csv', '../paintings64', transform=transform)
+dataset = datasets.ImageFolder('../paintings128/', transform=transform)
 dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=2)
+print("Dataset created")
 
 def weights_init(m):
 	classname = m.__class__.__name__
@@ -69,12 +71,12 @@ train_hist = {
 	}
 
 examples_seen = 0
-current_size = 4
+current_size = init_size
 for epoch in tqdm(range(1,n_epochs+1)):
 	i = 0
 	D_losses = []
 	G_losses = []
-	for x, g, s in dataloader:
+	for x, label in dataloader:
 		print("New batch starting")
 		if gpu:
 			x = x.cuda()

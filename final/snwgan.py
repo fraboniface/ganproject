@@ -32,8 +32,10 @@ transform = transforms.Compose(
     transforms.ToTensor(),
     transforms.Normalize((0.5,0.5,0.5), (0.5,0.5,0.5))
     ])
-dataset = PaintingsDataset('../info/dataset_info.csv', '../paintings64', transform=transform)
+#dataset = PaintingsDataset('../info/dataset_info.csv', '../paintings64', transform=transform)
+dataset = datasets.ImageFolder('../paintings64/', transform=transform)
 dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=2)
+print("Dataset created")
 
 def weights_init(m):
     classname = m.__class__.__name__
@@ -77,7 +79,7 @@ train_hist = {
 for epoch in tqdm(range(1,n_epochs+1)):
     D_losses = []
     G_losses = []
-    for x, g, s in dataloader:
+    for x, label in dataloader:
         print("New batch starting")
         if gpu:
             x = x.cuda()
