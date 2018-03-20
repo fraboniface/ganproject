@@ -13,10 +13,10 @@ import pickle
 from models import *
 from dataset import *
 
-model_name = 'SNWGAN'
+model_name = 'SNWGAN2'
 dataset_name = 'paintings64'
 SAVE_FOLDER = '../results/samples/{}/'.format(dataset_name)
-RESULTS_FOLDER = '../results/saved_data/'
+RESULTS_FOLDER = '../results/saved_data/regular_save/'
 
 batch_size = 64
 zdim = 100
@@ -127,15 +127,14 @@ for epoch in tqdm(range(1,n_epochs+1)):
         D_losses.append(D_err)
         G_losses.append(G_err)  
 
+    if epoch %5 == 0:
     # generates samples with fixed noise
-    fake = G(fixed_z)
-    vutils.save_image(fake.data, '{}{}__samples_epoch_{}.png'.format(SAVE_FOLDER, model_name, epoch), normalize=True, nrow=10)
+        fake = G(fixed_z)
+        vutils.save_image(fake.data, '{}{}_{}_samples_epoch_{}.png'.format(SAVE_FOLDER, model_name, n_feature_maps, epoch), normalize=True, nrow=10)
 
-    # saves everything, overwriting previous epochs
-    torch.save(G.state_dict(), RESULTS_FOLDER + '{}_{}_generator'.format(dataset_name, model_name))
-    torch.save(D.state_dict(), RESULTS_FOLDER + '{}_{}_discriminator'.format(dataset_name, model_name))
+        # saves everything, overwriting previous epochs
+        torch.save(G.state_dict(), RESULTS_FOLDER + '{}_{}_epoch_{}_generator'.format(dataset_name, model_name, epoch))
+        torch.save(D.state_dict(), RESULTS_FOLDER + '{}_{}_epoch_{}_discriminator'.format(dataset_name, model_name, epoch))
 
-    train_hist['D_loss'].append(np.array(D_losses).mean())
-    train_hist['G_loss'].append(np.array(G_losses).mean())
-    with open(RESULTS_FOLDER + 'losses_{}_{}.p'.format(dataset_name, model_name), 'wb') as f:
-        pickle.dump(train_hist, f)
+        with open(RESULTS_FOLDER + 'losses_and_samples_{}_{}_epoch_{}.p'.format(dataset_name, model_name, epoch), 'wb') as f:
+            pickle.dump(results, f)

@@ -56,18 +56,18 @@ class SNConv2d(conv._ConvNd):
         return F.conv2d(input, self.W_, self.bias, self.stride, self.padding, self.dilation, self.groups)
 
 
-model_name = 'SNDCGAN_fm_BN'
+model_name = 'SNDCGAN_fm_BN2'
 dataset_name = 'paintings64'
 
 SAVE_FOLDER = '../results/samples/{}/'.format(dataset_name)
-RESULTS_FOLDER = '../results/saved_data/'
+RESULTS_FOLDER = '../results/saved_data/regular_save/'
 
 batch_size = 100
 
 img_size = 64
 n_channels = 3
 n_feature_maps = 128
-n_epochs = 50
+n_epochs = 70
 
 transform = transforms.Compose(
 [
@@ -253,14 +253,14 @@ for epoch in tqdm(range(1,n_epochs+1)):
 
         G_optimiser.step()
 
-
+    if epoch %5 == 0:
     # generates samples with fixed noise
-    fake = G(fixed_z)
-    vutils.save_image(fake.data, '{}{}_{}_samples_epoch_{}.png'.format(SAVE_FOLDER, model_name, n_feature_maps, epoch), normalize=True, nrow=10)
+        fake = G(fixed_z)
+        vutils.save_image(fake.data, '{}{}_{}_samples_epoch_{}.png'.format(SAVE_FOLDER, model_name, n_feature_maps, epoch), normalize=True, nrow=10)
 
-    # saves everything, overwriting previous epochs
-    torch.save(G.state_dict(), RESULTS_FOLDER + '{}_{}_{}_generator'.format(dataset_name, model_name, n_feature_maps))
-    torch.save(D.state_dict(), RESULTS_FOLDER + '{}_{}_{}_discriminator'.format(dataset_name, model_name, n_feature_maps))
+        # saves everything, overwriting previous epochs
+        torch.save(G.state_dict(), RESULTS_FOLDER + '{}_{}_epoch_{}_generator'.format(dataset_name, model_name, epoch))
+        torch.save(D.state_dict(), RESULTS_FOLDER + '{}_{}_epoch_{}_discriminator'.format(dataset_name, model_name, epoch))
 
-    with open(RESULTS_FOLDER + 'losses_and_samples_{}_{}_{}.p'.format(dataset_name, model_name, n_feature_maps), 'wb') as f:
-        pickle.dump(results, f)
+        with open(RESULTS_FOLDER + 'losses_and_samples_{}_{}_epoch_{}.p'.format(dataset_name, model_name, epoch), 'wb') as f:
+            pickle.dump(results, f)

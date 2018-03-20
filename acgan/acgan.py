@@ -352,7 +352,7 @@ for epoch in tqdm(range(1,n_epochs+1)):
 	if epoch % 5 == 0:
 
 		# generates samples with fixed noise
-		fake = G(fixed_z, fixed_c)
+		fake = G(fixed_z)
 		vutils.save_image(fake.data, '{}{}_samples_epoch_{}.png'.format(SAVE_FOLDER, model_name, epoch), normalize=True, nrow=10)
 
 		train_hist['D_loss'].append(torch.mean(torch.FloatTensor(D_losses)))
