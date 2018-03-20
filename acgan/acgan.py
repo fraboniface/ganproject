@@ -12,20 +12,22 @@ import pickle
 import sys
 from tqdm import tqdm
 
+model_name = 'ACGAN3'
+
 dataset_name = sys.argv[1]
 assert dataset_name in ['paintings64', 'mnist', 'cifar']
 
 SAVE_FOLDER = '../results/samples/{}/'.format(dataset_name)
-RESULTS_FOLDER = '../results/saved_data/'
+RESULTS_FOLDER = '../results/saved_data/regular_save'
 
 batch_size = 100
 
 if dataset_name == 'paintings64':
-	n_classes = 6
+	n_classes = 5
 	img_size = 64
 	n_channels = 3
 	n_feature_maps = 128
-	n_epochs = 50
+	n_epochs = 60
 
 elif dataset_name == 'cifar':
 	n_classes = 10
@@ -80,7 +82,7 @@ source_criterion = nn.BCELoss()
 
 if dataset_name == 'paintings64':
 	n_examples = len(dataset)
-	class_weights = [7198,4089,10983,11545,12926,5702] # not ideal hard-coded like this
+	class_weights = [4089,10983,11545,12926,5702] # not ideal hard-coded like this
 	class_weights = torch.Tensor(class_weights)/n_examples
 	class_criterion = nn.CrossEntropyLoss(class_weights)
 
@@ -347,14 +349,19 @@ for epoch in tqdm(range(1,n_epochs+1)):
 		G_optimiser.step()
 
 
-	# generates samples with fixed noise
-	fake = G(fixed_z)
-	results['samples'].append(fake.data.cpu().numpy())
-	vutils.save_image(fake.data, '{}ACGAN_{}_samples_epoch_{}.png'.format(SAVE_FOLDER, n_feature_maps, epoch), normalize=True, nrow=n_samples_per_class)
+	if epoch % 5 == 0:
 
-	# saves everything, overwriting previous epochs
-	torch.save(G.state_dict(), RESULTS_FOLDER + '{}_ACGAN_{}_generator'.format(dataset_name, n_feature_maps))
-	torch.save(D.state_dict(), RESULTS_FOLDER + '{}_ACGAN_{}_discriminator'.format(dataset_name, n_feature_maps))
+		# generates samples with fixed noise
+		fake = G(fixed_z, fixed_c)
+		vutils.save_image(fake.data, '{}{}_samples_epoch_{}.png'.format(SAVE_FOLDER, model_name, epoch), normalize=True, nrow=10)
 
-	with open(RESULTS_FOLDER + 'losses_and_samples_{}_ACGAN_{}.p'.format(dataset_name, n_feature_maps), 'wb') as f:
-		pickle.dump(results, f)
+		train_hist['D_loss'].append(torch.mean(torch.FloatTensor(D_losses)))
+		train_hist['G_loss'].append(torch.mean(torch.FloatTensor(G_losses)))
+		train_hist['milb'].append(torch.mean(torch.FloatTensor(milbs)))
+
+		with open(RESULTS_FOLDER + 'losses_{}_{}_epoch_{}.p'.format(dataset_name, model_name, epoch), 'wb') as f:
+			pickle.dump(train_hist, f)
+
+		# saves everything, overwriting previous epochs
+		torch.save(G.state_dict(), RESULTS_FOLDER + '{}_{}_epoch_{}_generator'.format(dataset_name, model_name, epoch))
+		torch.save(DQ.state_dict(), RESULTS_FOLDER + '{}_{}_epoch_{}_D_and_Q'.format(dataset_name, model_name, epoch))
