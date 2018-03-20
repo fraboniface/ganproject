@@ -138,4 +138,63 @@ class Q_ACDiscriminator(nn.Module):
 			Qc_x = self.info_params(x).view(-1, 2*self.n_info_vars)
 			mean = Qc_x[-1,:self.n_info_vars]
 			var = torch.exp(Qc_x[-1,self.n_info_vars:])
-			return x, class1_logits, class2_logits, mean, var
+			return x, class1_logits, class2_logits, mean, 
+
+
+class Q_ACDiscriminator_1class(nn.Module):
+	def __init__(self, n_class1, n_info_vars, n_feature_maps):
+		super(Q_ACDiscriminator_1class, self).__init__()
+		self.n_class1 = n_class1
+		self.n_info_vars = n_info_vars
+
+		self.main = nn.Sequential(
+			#64x64
+			nn.Conv2d(3, n_feature_maps, 4, 2, 1, bias=False),
+			nn.LeakyReLU(0.2, inplace=True),
+			#32x32
+			nn.Conv2d(n_feature_maps, 2*n_feature_maps, 4, 2, 1, bias=False),
+			nn.BatchNorm2d(2*n_feature_maps),
+			nn.LeakyReLU(0.2, inplace=True),
+			#16x16
+			nn.Conv2d(2*n_feature_maps, 4*n_feature_maps, 4, 2, 1, bias=False),
+			nn.BatchNorm2d(4*n_feature_maps),
+			nn.LeakyReLU(0.2, inplace=True),
+			#8x8
+			nn.Conv2d(4*n_feature_maps, 8*n_feature_maps, 4, 2, 1, bias=False),
+			nn.BatchNorm2d(8*n_feature_maps),
+			nn.LeakyReLU(0.2, inplace=True),
+			# 4x4
+			nn.Conv2d(8*n_feature_maps, n_feature_maps, 4, 1, 0, bias=False)
+			#1x1
+		)
+		self.source = nn.Sequential(
+			nn.Conv2d(n_feature_maps, 1, 1, 1, 0, bias=False),
+			nn.Sigmoid()
+		)
+		self.class1_logits = nn.Conv2d(n_feature_maps, self.n_class1, 1, 1, 0, bias=False)
+		self.info_params = nn.Conv2d(n_feature_maps, 2*self.n_info_vars, 1, 1, 0, bias=False)
+
+
+	def  forward(self, x, mode='D', input_source='fake', only_fm=False):
+		assert mode in ['D', 'G']
+		assert input_source in ['real', 'fake']
+		x = self.main(x)
+		if only_fm:
+			return x
+
+		class1_logits = self.class1_logits(x).view(-1, self.n_class1)
+
+		if mode == 'D':
+			source = self.source(x).view(-1, 1).squeeze(1)
+			if input_source == 'real':
+				return source, class1_logits
+			else:
+				Qc_x = self.info_params(x).view(-1, 2*self.n_info_vars)
+				mean = Qc_x[-1,:self.n_info_vars]
+				var = torch.exp(Qc_x[-1,self.n_info_vars:])
+				return source, class1_logits, mean, var
+		else:
+			Qc_x = self.info_params(x).view(-1, 2*self.n_info_vars)
+			mean = Qc_x[-1,:self.n_info_vars]
+			var = torch.exp(Qc_x[-1,self.n_info_vars:])
+			return x, class1_logits, mean, var
