@@ -138,7 +138,7 @@ class Q_ACDiscriminator(nn.Module):
 			Qc_x = self.info_params(x).view(-1, 2*self.n_info_vars)
 			mean = Qc_x[-1,:self.n_info_vars]
 			var = torch.exp(Qc_x[-1,self.n_info_vars:])
-			return x, class1_logits, class2_logits, mean, 
+			return x, class1_logits, class2_logits, mean, var
 
 
 class Q_ACDiscriminator_1class(nn.Module):

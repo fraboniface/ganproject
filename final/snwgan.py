@@ -23,7 +23,7 @@ zdim = 100
 n_feature_maps = 128
 n_epochs = 100
 
-load_model = True
+load_model = False
 
 
 print("Dataset creation...")
