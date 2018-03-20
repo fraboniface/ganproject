@@ -125,16 +125,24 @@ for epoch in tqdm(range(1,n_epochs+1)):
         G_optimiser.step()
 
         D_losses.append(D_err)
-        G_losses.append(G_err)  
+        G_losses.append(G_err)
 
     if epoch %5 == 0:
     # generates samples with fixed noise
-        fake = G(fixed_z)
-        vutils.save_image(fake.data, '{}{}_{}_samples_epoch_{}.png'.format(SAVE_FOLDER, model_name, n_feature_maps, epoch), normalize=True, nrow=10)
+=        fake = G(fixed_z)
+        vutils.save_image(fake.data, '{}{}__samples_epoch_{}.png'.format(SAVE_FOLDER, model_name, epoch), normalize=True, nrow=n_samples_per_class)
+        print("Samples saved")
 
         # saves everything, overwriting previous epochs
-        torch.save(G.state_dict(), RESULTS_FOLDER + '{}_{}_epoch_{}_generator'.format(dataset_name, model_name, epoch))
-        torch.save(D.state_dict(), RESULTS_FOLDER + '{}_{}_epoch_{}_discriminator'.format(dataset_name, model_name, epoch))
+        torch.save(G.state_dict(), RESULTS_FOLDER + '{}_{}_generator'.format(dataset_name, model_name))
+        torch.save(D.state_dict(), RESULTS_FOLDER + '{}_{}_discriminator'.format(dataset_name, model_name))
+        print("Model saved")
 
-        with open(RESULTS_FOLDER + 'losses_and_samples_{}_{}_epoch_{}.p'.format(dataset_name, model_name, epoch), 'wb') as f:
-            pickle.dump(results, f)
+        train_hist['D_loss'].append(np.array(D_losses).mean())
+        train_hist['G_loss'].append(np.array(G_losses).mean())
+        if INFO:
+            train_hist['milb'].append(np.array(milbs).mean())
+
+        with open(RESULTS_FOLDER + 'losses_{}_{}.p'.format(dataset_name, model_name), 'wb') as f:
+            pickle.dump(train_hist, f)
+        print("Losses saved")

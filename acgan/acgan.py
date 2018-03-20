@@ -259,22 +259,14 @@ if gpu:
 	zeros = zeros.cuda()
 	fixed_z = fixed_z.cuda()
 
-results = {
-	'samples': [],
-	'real_Ls': [],
-	'real_Lc': [],
-	'D_real_loss': [],
-	'fake_Ls': [],
-	'fake_Lc': [],
-	'D_fake_loss': [],
+train_hist = {
 	'D_loss': [],
-	'gen_Ls': [],
-	'gen_Lc': [],
 	'G_loss': []
-
 }
 
 for epoch in tqdm(range(1,n_epochs+1)):
+	D_losses = []
+	G_losses = []
 	for img, labels in dataloader:
 		if img.size(0) < batch_size:
 			continue
@@ -291,11 +283,8 @@ for epoch in tqdm(range(1,n_epochs+1)):
 		#real data
 		D_real_source, D_real_class = D(img)
 		D_real_Ls = source_criterion(D_real_source, ones)
-		results['real_Ls'].append(D_real_Ls)
 		D_real_Lc = class_criterion(D_real_class, labels)
-		results['real_Lc'].append(D_real_Lc)
 		D_real_error = D_real_Ls + D_real_Lc
-		results['D_real_loss'].append(D_real_error)
 		D_real_error.backward()
 
 		#fake data
@@ -312,14 +301,11 @@ for epoch in tqdm(range(1,n_epochs+1)):
 		fake_data = G(z)
 		D_fake_source, D_fake_class = D(fake_data.detach())
 		D_fake_Ls = source_criterion(D_fake_source, zeros)
-		results['fake_Ls'].append(D_fake_Ls.data.cpu().numpy())
 		D_fake_Lc = class_criterion(D_fake_class, y)
-		results['fake_Lc'].append(D_fake_Lc.data.cpu().numpy())
 		D_fake_error = D_fake_Ls + D_fake_Lc
-		results['D_fake_loss'].append(D_fake_error.data.cpu().numpy())
 		D_fake_error.backward()
 
-		results['D_loss'].append(D_real_error+D_fake_error)
+		D_losses.append(D_real_error+D_fake_error)
 		D_optimiser.step()
 
 
@@ -339,11 +325,9 @@ for epoch in tqdm(range(1,n_epochs+1)):
 		gen_data = G(z)
 		D_gen_source, D_gen_class = D(gen_data)
 		gen_Ls = source_criterion(D_gen_source, ones)
-		results['gen_Ls'].append(gen_Ls.data.cpu().numpy())
 		gen_Lc = class_criterion(D_gen_class, y)
-		results['gen_Lc'].append(gen_Lc.data.cpu().numpy())
 		G_error = gen_Ls + gen_Lc
-		results['G_loss'].append(G_error.data.cpu().numpy())
+		G_losses.append(G_error)
 		G_error.backward()
 
 		G_optimiser.step()
@@ -357,7 +341,6 @@ for epoch in tqdm(range(1,n_epochs+1)):
 
 		train_hist['D_loss'].append(torch.mean(torch.FloatTensor(D_losses)))
 		train_hist['G_loss'].append(torch.mean(torch.FloatTensor(G_losses)))
-		train_hist['milb'].append(torch.mean(torch.FloatTensor(milbs)))
 
 		with open(RESULTS_FOLDER + 'losses_{}_{}_epoch_{}.p'.format(dataset_name, model_name, epoch), 'wb') as f:
 			pickle.dump(train_hist, f)
