@@ -77,10 +77,12 @@ train_hist = {
     }
 
 for epoch in tqdm(range(1,n_epochs+1)):
+    i = 0
     D_losses = []
     G_losses = []
     for x, label in dataloader:
-        print("New batch starting")
+        i += 1
+        print('{}: Epoch {}, batch {} starting...'.format(model_name, epoch, i))
         if gpu:
             x = x.cuda()
 

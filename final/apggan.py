@@ -12,7 +12,7 @@ import pickle
 from models import *
 from dataset import *
 
-model_name = 'PG_SNGAN'
+model_name = 'APG_SNGAN'
 dataset_name = 'paintings128'
 SAVE_FOLDER = '../results/samples/{}/'.format(dataset_name)
 RESULTS_FOLDER = '../results/saved_data/'
@@ -26,7 +26,6 @@ n_epochs = 100
 
 epsilon_drift = 1e-3
 n_samples_seen = 1e5
-alphas = np.linspace(0,1,int(n_samples_seen/batch_size)+1)
 
 print("Dataset creation...")
 
@@ -45,9 +44,9 @@ def weights_init(m):
 	if classname.find('Conv' or 'SNConv') != -1:
 		nn.init.kaiming_normal(m.weight.data)
 
-G = GrowingGenerator(zdim, init_size, final_size, n_feature_maps)
+G = AbruptGrowingGenerator(zdim, init_size, final_size, n_feature_maps)
 G.apply(weights_init)
-D = GrowingDiscriminator(init_size, final_size, n_feature_maps)
+D = AbruptGrowingDiscriminator(init_size, final_size, n_feature_maps)
 D.apply(weights_init)
 
 fixed_z = torch.FloatTensor(batch_size, zdim, 1, 1).normal_(0,1)
@@ -123,32 +122,22 @@ for epoch in tqdm(range(1,n_epochs+1)):
 
 		examples_seen += x.size(0)
 
-		if G.transitioning:
-			G.alpha = alphas[i]
-			D.alpha = alphas[i]
-			print(G.alpha)
-
 		D_losses.append(D_err)
 		G_losses.append(G_err)
 
 	# we grow every n_samples_seen images (more or less bacause we wait for the end of the epoch anyway)
 	if examples_seen > n_samples_seen:
-		if G.transitioning:
-			examples_seen = 0
-			G.transitioning = False
-			D.transitioning = False
-		else:
-			examples_seen = 0
-			current_size *= 2
-			G.grow()
-			D.grow()
-			if gpu:
-				G.cuda()
-				D.cuda()
-				
-			G_optimiser.add_param_group({'params': G.new_parameters})
-			D_optimiser.add_param_group({'params': filter(lambda p: p.requires_grad, D.new_parameters)})
-			print('Networks grown, current size is', current_size)
+		examples_seen = 0
+		current_size *= 2
+		G.grow()
+		D.grow()
+		if gpu:
+			G.cuda()
+			D.cuda()
+			
+		G_optimiser.add_param_group({'params': G.new_parameters})
+		D_optimiser.add_param_group({'params': filter(lambda p: p.requires_grad, D.new_parameters)})
+		print('Networks grown, current size is', current_size)
 
 			
 
