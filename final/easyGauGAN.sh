@@ -24,6 +24,13 @@ export PYTHON_PATH=$PATH
 
 mkdir -p /disk/scratch/${STUDENT_ID}
 
+echo "checking folder"
+if [ ! - d /disk/scratch/${STUDENT_ID}/paintings64/]; then
+	echo "copying folder"
+    cp -rf /home/s1782330/ganproject/paintings64 /disk/scratch/${STUDENT_ID}/
+    echo "copy completed"
+fi
+
 export TMPDIR=/disk/scratch/${STUDENT_ID}/
 export TMP=/disk/scratch/${STUDENT_ID}/
 

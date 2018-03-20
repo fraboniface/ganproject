@@ -18,7 +18,7 @@ dataset_name = sys.argv[1]
 assert dataset_name in ['paintings64', 'mnist', 'cifar']
 
 SAVE_FOLDER = '../results/samples/{}/'.format(dataset_name)
-RESULTS_FOLDER = '../results/saved_data/regular_save'
+RESULTS_FOLDER = '../results/saved_data/regular_save/'
 
 batch_size = 100
 
