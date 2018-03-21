@@ -245,7 +245,7 @@ ones = Variable(torch.FloatTensor(batch_size).uniform_(0.9,1))
 zeros = Variable(torch.zeros(batch_size))
 
 G_criterion = nn.MSELoss()
-source_criterion = nn.BCELoss()
+D_criterion = nn.BCELoss()
 
 # to GPU
 gpu = torch.cuda.is_available()
@@ -304,8 +304,8 @@ for epoch in tqdm(range(1,n_epochs+1)):
 		z = Variable(z)
 		y = Variable(y)
 		fake_data = G(z)
-		D_fake_source, D_fake_class = D(fake_data.detach())
-		D_fake_Ls = source_criterion(D_fake_source, zeros)
+		_, D_fake_source, D_fake_class = D(fake_data.detach())
+		D_fake_Ls = D_criterion(D_fake_source, zeros)
 		D_fake_Lc = class_criterion(D_fake_class, y)
 		D_fake_error = D_fake_Ls + D_fake_Lc
 		
@@ -331,11 +331,11 @@ for epoch in tqdm(range(1,n_epochs+1)):
 		D_fake_features, D_gen_class = D(gen_data, matching=True)
 		D_real_features = torch.mean(D_real_features, 0)
 		D_fake_features = torch.mean(D_fake_features,0)
-		gen_Ls = G_criterion(D_gen_features, D_real_features.detach())
+		gen_Ls = G_criterion(D_fake_features, D_real_features.detach())
 		gen_Lc = class_criterion(D_gen_class, y)
 		G_loss = gen_Ls + gen_Lc
 
-		G_error.backward()
+		G_loss.backward()
 		G_optimiser.step()
 
 		D_losses.append(D_loss.data[0])
