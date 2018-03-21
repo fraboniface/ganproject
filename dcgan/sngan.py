@@ -57,7 +57,7 @@ class SNConv2d(conv._ConvNd):
 
 
 model_name = 'SNDCGAN_fm_BN2'
-dataset_name = 'paintings64'
+dataset_name = 'portraits64'
 
 SAVE_FOLDER = '../results/samples/{}/'.format(dataset_name)
 RESULTS_FOLDER = '../results/saved_data/regular_save/'
@@ -76,7 +76,7 @@ transform = transforms.Compose(
 ])
 
 
-dataset = datasets.ImageFolder('../paintings64/', transform=transform)
+dataset = datasets.ImageFolder('../portraits64/', transform=transform)
 dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=2)
 
 #custom weights init
@@ -253,12 +253,12 @@ for epoch in tqdm(range(1,n_epochs+1)):
 
         G_optimiser.step()
 
+    fake = G(fixed_z)
+    vutils.save_image(fake.data, '{}{}_{}_samples_epoch_{}.png'.format(SAVE_FOLDER, model_name, n_feature_maps, epoch), normalize=True, nrow=10)
+
     if epoch %5 == 0:
     # generates samples with fixed noise
-        fake = G(fixed_z)
-        vutils.save_image(fake.data, '{}{}_{}_samples_epoch_{}.png'.format(SAVE_FOLDER, model_name, n_feature_maps, epoch), normalize=True, nrow=10)
-
-        # saves everything, overwriting previous epochs
+                # saves everything, overwriting previous epochs
         torch.save(G.state_dict(), RESULTS_FOLDER + '{}_{}_epoch_{}_generator'.format(dataset_name, model_name, epoch))
         torch.save(D.state_dict(), RESULTS_FOLDER + '{}_{}_epoch_{}_discriminator'.format(dataset_name, model_name, epoch))
 
