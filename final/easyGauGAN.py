@@ -39,7 +39,7 @@ transform = transforms.Compose(
 	transforms.ToTensor(),
 	transforms.Normalize((0.5,0.5,0.5), (0.5,0.5,0.5))
 ])
-dataset = PaintingsDataset('../info/dataset_info.csv', '../paintings64', transform=transform)
+dataset = PaintingsDataset('../info/dataset_info.csv', '/disk/scratch/s1782330/paintings64', transform=transform)
 dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=2)
 
 n_genre_classes = len(dataset.genres)
