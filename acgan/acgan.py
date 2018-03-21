@@ -78,12 +78,10 @@ def weights_init(m):
 		m.weight.data.normal_(1.0, 0.02)
 		m.bias.data.fill_(0)
 
-source_criterion = nn.BCELoss()
-
 if dataset_name == 'paintings64':
 	n_examples = len(dataset)
-	class_weights = [4089,10983,11545,12926,5702] # not ideal hard-coded like this
-	class_weights = torch.Tensor(class_weights)/n_examples
+	class_weights = np.array([4089,10983,11545,12926,5702], dtype=np.float) # not ideal hard-coded like this
+	class_weights = 1/torch.Tensor(class_weights)
 	class_criterion = nn.CrossEntropyLoss(class_weights)
 
 	class ACGenerator(nn.Module):
@@ -145,11 +143,15 @@ if dataset_name == 'paintings64':
 	        )
 	        self.class_logits = nn.Conv2d(n_feature_maps, n_classes, 1, 1, 0, bias=False)
 
-	    def  forward(self, x):
-	    	x = self.main(x)
-	    	source = self.source(x).view(-1, 1).squeeze(1)
-	    	class_logits = self.class_logits(x).view(-1, n_classes)
-	    	return source, class_logits
+	    def  forward(self, x, matching=False):
+	        x = self.main(x)
+
+	        class_logits = self.class_logits(x).view(-1, n_classes)
+	        if matching :
+	            return x, class_logits
+	        else:
+	            source = self.source(x).view(-1, 1).squeeze(1)
+	            return x, source, class_logits
 
 else:
 	class_criterion = nn.CrossEntropyLoss()
@@ -222,12 +224,6 @@ G.apply(weights_init)
 D = ACDiscriminator(n_feature_maps)
 D.apply(weights_init)
 
-lr = 2e-4
-beta1 = 0.5
-beta2 = 0.999
-G_optimiser = optim.Adam(G.parameters(), lr=lr, betas=(beta1, beta2))
-D_optimiser = optim.Adam(D.parameters(), lr=lr, betas=(beta1, beta2))
-
 # label preprocessing
 # tensor containing the corresponding n_classesx1x1 tensor for each label 
 onehot = torch.eye(n_classes).view(n_classes,n_classes,1,1)
@@ -245,19 +241,29 @@ fixed_y = onehot[fixed_y]
 fixed_z = torch.cat([fixed_z,fixed_y],1)
 fixed_z = Variable(fixed_z, volatile=True)
 
-ones = Variable(torch.ones(batch_size))
+ones = Variable(torch.FloatTensor(batch_size).uniform_(0.9,1))
 zeros = Variable(torch.zeros(batch_size))
+
+G_criterion = nn.MSELoss()
+source_criterion = nn.BCELoss()
 
 # to GPU
 gpu = torch.cuda.is_available()
 if gpu:
 	G.cuda()
 	D.cuda()
-	source_criterion.cuda()
+	D_criterion.cuda()
 	class_criterion.cuda()
+	G_criterion.cuda()
 	ones = ones.cuda()
 	zeros = zeros.cuda()
 	fixed_z = fixed_z.cuda()
+
+lr = 2e-4
+beta1 = 0.5
+beta2 = 0.999
+G_optimiser = optim.Adam(G.parameters(), lr=lr, betas=(beta1, beta2))
+D_optimiser = optim.Adam(D.parameters(), lr=lr, betas=(beta1, beta2))
 
 train_hist = {
 	'D_loss': [],
@@ -281,11 +287,10 @@ for epoch in tqdm(range(1,n_epochs+1)):
 		D.zero_grad()
 
 		#real data
-		D_real_source, D_real_class = D(img)
-		D_real_Ls = source_criterion(D_real_source, ones)
+		D_real_features, D_real_source, D_real_class = D(img)
+		D_real_Ls = D_criterion(D_real_source, ones)
 		D_real_Lc = class_criterion(D_real_class, labels)
 		D_real_error = D_real_Ls + D_real_Lc
-		D_real_error.backward()
 
 		#fake data
 		z = torch.FloatTensor(batch_size, z_size, 1, 1).normal_(0,1)
@@ -303,9 +308,9 @@ for epoch in tqdm(range(1,n_epochs+1)):
 		D_fake_Ls = source_criterion(D_fake_source, zeros)
 		D_fake_Lc = class_criterion(D_fake_class, y)
 		D_fake_error = D_fake_Ls + D_fake_Lc
-		D_fake_error.backward()
-
-		D_losses.append(D_real_error+D_fake_error)
+		
+		D_loss = D_real_error + D_fake_error
+		D_loss.backward()
 		D_optimiser.step()
 
 
@@ -323,14 +328,18 @@ for epoch in tqdm(range(1,n_epochs+1)):
 		z = Variable(z)
 		y = Variable(y)
 		gen_data = G(z)
-		D_gen_source, D_gen_class = D(gen_data)
-		gen_Ls = source_criterion(D_gen_source, ones)
+		D_fake_features, D_gen_class = D(gen_data, matching=True)
+		D_real_features = torch.mean(D_real_features, 0)
+		D_fake_features = torch.mean(D_fake_features,0)
+		gen_Ls = G_criterion(D_gen_features, D_real_features.detach())
 		gen_Lc = class_criterion(D_gen_class, y)
-		G_error = gen_Ls + gen_Lc
-		G_losses.append(G_error)
-		G_error.backward()
+		G_loss = gen_Ls + gen_Lc
 
+		G_error.backward()
 		G_optimiser.step()
+
+		D_losses.append(D_loss.data[0])
+		G_losses.append(G_loss.data[0])
 
 
 	if epoch % 5 == 0:
