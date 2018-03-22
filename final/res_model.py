@@ -62,11 +62,20 @@ class SNConv2d(conv._ConvNd):
         return F.conv2d(input, self.W_, self.bias, self.stride, self.padding, self.dilation, self.groups)
 
 
-def block(in_fm, out_fm):
+def SNblock(in_fm, out_fm):
     l = [
         SNConv2d(in_fm, out_fm, 3, 1, 1, bias=False),
         nn.LeakyReLU(0.2, inplace=True),
         SNConv2d(out_fm, out_fm, 3, 1, 1, bias=False),
+        nn.LeakyReLU(0.2, inplace=True)
+    ]
+    return nn.Sequential(*l)
+
+def block(in_fm, out_fm):
+    l = [
+        nn.Conv2d(in_fm, out_fm, 3, 1, 1, bias=False),
+        nn.LeakyReLU(0.2, inplace=True),
+        nn.Conv2d(out_fm, out_fm, 3, 1, 1, bias=False),
         nn.LeakyReLU(0.2, inplace=True)
     ]
     return nn.Sequential(*l)
@@ -101,13 +110,13 @@ class ResidualCritic(nn.Module):
     def __init__(self, zdim=100, n_feature_maps=256):
         super(ResidualCritic, self).__init__()
 
-        self.from_rgb = block(3, n_feature_maps)
+        self.from_rgb = SNblock(3, n_feature_maps)
         self.downsample = nn.AvgPool2d(2)
-        self.block1 = block(n_feature_maps, n_feature_maps)
-        self.block2 = block(n_feature_maps, 2*n_feature_maps)
+        self.block1 = SNblock(n_feature_maps, n_feature_maps)
+        self.block2 = SNblock(n_feature_maps, 2*n_feature_maps)
         self.skip2 = SNConv2d(n_feature_maps,2*n_feature_maps, 1, 1, 0, bias=False)
-        self.block3 = block(2*n_feature_maps, 2*n_feature_maps)
-        self.block4= block(2*n_feature_maps, 2*n_feature_maps)
+        self.block3 = SNblock(2*n_feature_maps, 2*n_feature_maps)
+        self.block4= SNblock(2*n_feature_maps, 2*n_feature_maps)
         self.mbstd = MinibatchSDLayer()
         self.last_conv = SNConv2d(2*n_feature_maps+1, 4*n_feature_maps, 4, 1, 0, bias=False)
         self.fc = SNConv2d(4*n_feature_maps, 1, 1, 1, 0, bias=False)
