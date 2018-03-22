@@ -64,9 +64,9 @@ class SNConv2d(conv._ConvNd):
 
 def block(in_fm, out_fm):
     l = [
-        nn.Conv2d(in_fm, out_fm, 3, 1, 1, bias=True),
+        SNConv2d(in_fm, out_fm, 3, 1, 1, bias=False),
         nn.LeakyReLU(0.2, inplace=True),
-        nn.Conv2d(out_fm, out_fm, 3, 1, 1, bias=True),
+        SNConv2d(out_fm, out_fm, 3, 1, 1, bias=False),
         nn.LeakyReLU(0.2, inplace=True)
     ]
     return nn.Sequential(*l)
@@ -76,11 +76,11 @@ class ResidualGenerator(nn.Module):
     def __init__(self, zdim=100, n_feature_maps=256):
         super(ResidualGenerator, self).__init__()
 
-        self.from_latent = nn.ConvTranspose2d(zdim, 2*n_feature_maps, 4, 1, 0, bias=True)
+        self.from_latent = nn.ConvTranspose2d(zdim, 2*n_feature_maps, 4, 1, 0, bias=False)
         self.block1 = block(2*n_feature_maps, 2*n_feature_maps)
         self.upsample = nn.Upsample(scale_factor=2, mode='nearest')
         self.block2 = block(2*n_feature_maps, n_feature_maps)
-        self.skip = nn.Conv2d(2*n_feature_maps,n_feature_maps, 1, 1, 0, bias=True)
+        self.skip = nn.Conv2d(2*n_feature_maps,n_feature_maps, 1, 1, 0, bias=False)
         self.block3 = block(n_feature_maps, n_feature_maps)
         self.to_rgb = block(n_feature_maps, 3)
                 
@@ -105,12 +105,12 @@ class ResidualCritic(nn.Module):
         self.downsample = nn.AvgPool2d(2)
         self.block1 = block(n_feature_maps, n_feature_maps)
         self.block2 = block(n_feature_maps, 2*n_feature_maps)
-        self.skip2 = SNConv2d(n_feature_maps,2*n_feature_maps, 1, 1, 0, bias=True)
+        self.skip2 = SNConv2d(n_feature_maps,2*n_feature_maps, 1, 1, 0, bias=False)
         self.block3 = block(2*n_feature_maps, 2*n_feature_maps)
         self.block4= block(2*n_feature_maps, 2*n_feature_maps)
         self.mbstd = MinibatchSDLayer()
-        self.last_conv = SNConv2d(2*n_feature_maps+1, 4*n_feature_maps, 4, 1, 0, bias=True)
-        self.fc = SNConv2d(4*n_feature_maps, 1, 1, 1, 0, bias=True)
+        self.last_conv = SNConv2d(2*n_feature_maps+1, 4*n_feature_maps, 4, 1, 0, bias=False)
+        self.fc = SNConv2d(4*n_feature_maps, 1, 1, 1, 0, bias=False)
 
     def forward(self, x):
         x = self.from_rgb(x) #64x64xnc
